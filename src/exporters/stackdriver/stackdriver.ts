@@ -24,6 +24,7 @@ import { JWT } from 'google-auth-library'
 import { Trace } from '../../trace/model/trace'
 
 const cloudTrace = google.cloudtrace('v1');
+const BUFFER_SIZE = 3;
 
 export class Stackdriver implements Exporter {
     projectId: string;
@@ -46,7 +47,7 @@ export class Stackdriver implements Exporter {
         spanList.push(this.translateSpan(trace));
 
         // Builds trace data
-        let resource = {
+        /*let resource = {
             "traces": [
                 {
                     "projectId": this.projectId,
@@ -54,9 +55,16 @@ export class Stackdriver implements Exporter {
                     "spans": spanList
                 }
             ]
+        }*/
+        let traceResource = {
+            "projectId": this.projectId,
+            "traceId": trace.traceId,
+            "spans": spanList
         }
-        //this.buffer[trace.traceId] = resource
-        this.authorize(this.sendTrace, resource);
+        this.buffer[trace.traceId] = traceResource;
+        this.emit();
+        //this.addToBuffer(trace.traceId, resource)
+        //this.authorize(this.sendTrace, resource);
     }
 
     private translateSpan(span) {
@@ -69,11 +77,31 @@ export class Stackdriver implements Exporter {
         }
     }
 
-    // TODO: Rename to "flushBuffer" and "publish"
-    private sendTrace(projectId, authClient, resource) {
+    /* Makes sure the trace doesn't already exists
+    private addToBuffer(traceId, resource) {
+        if (!this.buffer[traceId]) {
+            this.buffer[traceId] = resource;
+        }
+        else {
+            this.buffer[traceId]['spans'].push(resource['spans'])
+        }
+    }*/
+
+    private emit() {
+        if (Object.keys(this.buffer).length > BUFFER_SIZE) {
+            let traceResources = Object.keys(this.buffer).map(key => this.buffer[key]);
+            this.authorize(this.publish, traceResources);
+            //TODO clear buffer
+        }
+    }
+
+    // TODO Check naming: "flushBuffer" or "publish"?
+    private publish(projectId, authClient, traceResources) {
         let request = {
             projectId: projectId,
-            resource: resource,
+            resource: {
+                traces: traceResources
+            },
             auth: authClient
         }
         cloudTrace.projects.patchTraces(request, function (err) {
@@ -86,7 +114,7 @@ export class Stackdriver implements Exporter {
         })
     }
 
-    private authorize(callback, resource) {
+    private authorize(callback, traceResources) {
         google.auth.getApplicationDefault(function (err, authClient: JWT, projectId) {
             if (err) {
                 console.error('authentication failed: ', err);
@@ -96,7 +124,7 @@ export class Stackdriver implements Exporter {
                 var scopes = ['https://www.googleapis.com/auth/cloud-platform'];
                 authClient = authClient.createScoped(scopes);
             }
-            callback(projectId, authClient, resource);
+            callback(projectId, authClient, traceResources);
         });
     }
 }
