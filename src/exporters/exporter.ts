@@ -21,4 +21,6 @@ import {Trace} from '../trace/model/trace'
 export interface Exporter {
     
     writeTrace(trace: Trace);
+
+    emit(traces: Trace[]);
 }

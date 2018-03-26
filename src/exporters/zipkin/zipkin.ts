@@ -24,7 +24,12 @@ export class Zipkin implements Exporter {
     constructor(options: ZipkinOptions) {
         throw new Error("Method not implemented.");
     }
+
     writeTrace(trace: Trace) {
+        throw new Error("Method not implemented.");
+    }
+    
+    emit(traces: Trace[]) {
         throw new Error("Method not implemented.");
     }
 }

@@ -71,6 +71,5 @@ export class Tracing {
         this._tracer.registerExporter(this._exporter);
         return this.start();
     }
-
 }
 
