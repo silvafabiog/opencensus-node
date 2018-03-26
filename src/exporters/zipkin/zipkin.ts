@@ -17,19 +17,95 @@
 
 import { Exporter } from "../exporter"
 import { ZipkinOptions } from "./options"
-import { Trace } from "../../trace/model/trace";
-
+import { RootSpan } from "../../trace/model/rootspan";
+import * as http from "http"
+import { debug } from "../../internal/util"
 
 export class Zipkin implements Exporter {
-    constructor(options: ZipkinOptions) {
-        throw new Error("Method not implemented.");
-    }
+    url: string;
+    serviceName: string;
 
-    writeTrace(trace: Trace) {
-        throw new Error("Method not implemented.");
+    constructor(options: ZipkinOptions) {
+        this.url = options.url;
+        this.serviceName = options.serviceName;
     }
     
-    emit(traces: Trace[]) {
-        throw new Error("Method not implemented.");
+    writeTrace(root: RootSpan) {
+        let spans = [];
+
+        let spanRoot = {
+            "traceId": root.traceId,
+            "name": root.name,
+            "id": root.id,
+            "kind": "SERVER",
+            "timestamp": root.startTime.getTime()*1000,
+            "duration": root.duration*1000000,
+            "debug": true,
+            "shared": true,
+            "localEndpoint": {
+                "serviceName": this.serviceName
+            }
+        }
+        spans.push(spanRoot);
+
+        for (let span of root.spans) {
+            let spanObj = {
+                "traceId": root.traceId,
+                "parentId": root.id,
+                "name": span.name,
+                "id": span.id,
+                "kind": "SERVER",
+                "timestamp": span.startTime.getTime()*1000,
+                "duration": span.duration*1000000,
+                "debug": true,
+                "shared": true,
+                "localEndpoint": {
+                    "serviceName": this.serviceName
+                }
+            }
+            spans.push(spanObj);
+        }
+
+        const options = {
+            hostname: 'localhost',
+            port: 9411,
+            path: '/api/v2/spans',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        };
+
+
+        const req = http.request(options, (res) => {
+            debug(`STATUS: ${res.statusCode}`);
+            debug(`HEADERS: ${JSON.stringify(res.headers)}`);
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => {
+                debug(`BODY: ${chunk}`);
+            });
+            res.on('end', () => {
+                debug('No more data in response.');
+            });
+        });
+
+        req.on('error', (e) => {
+            debug(`problem with request: ${e.message}`);
+        });
+
+        // write data to request body
+        let spansJson: string[] = spans.map((span)=> JSON.stringify(span));
+        spansJson.join("");
+        let outputJson:string = `[${spansJson}]`
+        debug('Zipkins span list Json: %s', outputJson);
+        req.write(outputJson);
+        req.end();
     }
+
+    emit(rootSpans: RootSpan[]) {}
+
+    public onEndSpan(rootSpan: RootSpan) {
+        this.writeTrace(rootSpan);
+    }
+
 }

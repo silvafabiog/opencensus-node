@@ -21,7 +21,7 @@ import { StackdriverOptions } from './options'
 import { Exporter } from '../exporter'
 import { google } from 'googleapis'
 import { JWT } from 'google-auth-library'
-import { Trace } from '../../trace/model/trace'
+import { RootSpan } from '../../trace/model/rootspan'
 import { Buffer } from '../buffer'
 
 const cloudTrace = google.cloudtrace('v1');
@@ -36,11 +36,15 @@ export class Stackdriver implements Exporter {
         this.buffer = new Buffer(this);
     }
 
-    public writeTrace(trace: Trace) {
+    public onEndSpan(rootSpan: RootSpan) {
+        this.writeTrace(rootSpan);
+    }
+
+    public writeTrace(trace: RootSpan) {
         this.buffer.addToBuffer(trace)
     }
 
-    public emit(traces: Trace[]) {
+    public emit(traces: RootSpan[]) {
         let stackdriverTraces = [];
         traces.forEach(trace => {
             stackdriverTraces.push(this.translateTrace(trace));
@@ -48,19 +52,19 @@ export class Stackdriver implements Exporter {
         this.authorize(this.publish, stackdriverTraces);
     }
 
-    private translateTrace(trace: Trace) {
+    private translateTrace(root: RootSpan) {
         // Builds span data
         let spanList = []
-        trace.spans.forEach(span => {
+        root.spans.forEach(span => {
             spanList.push(this.translateSpan(span));
         });
 
         // Builds root span data
-        spanList.push(this.translateSpan(trace));
+        spanList.push(this.translateSpan(root));
 
         return {
             "projectId": this.projectId,
-            "traceId": trace.traceId,
+            "traceId": root.traceId,
             "spans": spanList
         }
     }

@@ -15,7 +15,7 @@
  */
 
 import * as cls from '../internal/cls'
-import { Trace } from './model/trace'
+import { RootSpan } from './model/rootspan'
 import { Span } from './model/span'
 import { PluginLoader } from './plugins/pluginloader'
 import { debug } from '../internal/util'
@@ -24,10 +24,21 @@ import { StackdriverOptions } from '../exporters/stackdriver/options'
 import { Zipkin } from '../exporters/zipkin/zipkin'
 import { ZipkinOptions } from '../exporters/zipkin/options'
 import { Tracer } from './model/tracer'
-import { Exporter } from '../exporters/exporter'
 import { ExporterOptions } from '../exporters/exporterOptions';
+import { Exporter, NoopExporter, ConsoleLogExporter } from '../exporters/exporter'
 
 export type Func<T> = (...args: any[]) => T;
+
+export interface TracerConfig {
+    exporter?: Exporter,
+    sampleRate?: number;
+    ignoreUrls?:  Array<string|RegExp>;
+}
+
+export const defaultConfig: TracerConfig = {
+    exporter: new NoopExporter(),
+    sampleRate: 1.0
+}
 
 export class Tracing {
 
@@ -41,6 +52,8 @@ export class Tracing {
     constructor() {
         this._tracer = new Tracer();
         this.pluginLoader = new PluginLoader(this._tracer);
+        //if(debug)
+        this._tracer.registerEndSpanListener(new ConsoleLogExporter());
     }
 
     public start(): Tracing {
@@ -50,7 +63,12 @@ export class Tracing {
         return this;
     }
 
-    public get Tracer(): Tracer {
+    public stop() {
+        this._active = false;
+        this._tracer.stop();
+    }
+    
+    public get Tracer() : Tracer {
         return this._tracer;
     }
 
@@ -58,18 +76,18 @@ export class Tracing {
         return this._exporter;
     }
 
-    public startStackdriver(projectId: string): Tracing {
+    public addStackdriver(projectId: string): Tracing {
         let stackdriverOptions = new StackdriverOptions(projectId);
         this._exporter = new Stackdriver(stackdriverOptions);
-        this._tracer.registerExporter(this._exporter);
-        return this.start();
+        this._tracer.registerEndSpanListener(this._exporter);
+        return this;
     }
 
-    public startZipkin(url: string): Tracing {
-        let zipkinOptions = new ZipkinOptions(url);
+    public addZipkin(url: string, serviceName: string): Tracing {
+        let zipkinOptions = new ZipkinOptions(url, serviceName);
         this._exporter = new Zipkin(zipkinOptions);
-        this._tracer.registerExporter(this._exporter);
-        return this.start();
+        this._tracer.registerEndSpanListener(this._exporter);
+        return this;
     }
 }
 

@@ -19,9 +19,40 @@ import * as shimmer from 'shimmer'
 import * as url from 'url'
 import * as eos from 'end-of-stream'
 
-import {Tracer} from '../model/tracer'
-import {debug} from '../../internal/util'
-import {Plugin, BasePlugin} from './plugingtypes'
+import { Tracer } from '../model/tracer'
+import { debug } from '../../internal/util'
+import { Plugin, BasePlugin } from './plugingtypes'
+
+/*
+module.exports = {
+  TraceId: 'X-B3-TraceId',
+  SpanId: 'X-B3-SpanId',
+  ParentSpanId: 'X-B3-ParentSpanId',
+  Sampled: 'X-B3-Sampled',
+  Flags: 'X-B3-Flags'
+}; 
+
+function appendZipkinHeaders(req, traceId) {
+  const headers = req.headers || {};
+  headers[HttpHeaders.TraceId] = traceId.traceId;
+  headers[HttpHeaders.SpanId] = traceId.spanId;
+
+  traceId._parentId.ifPresent(psid => {
+    headers[HttpHeaders.ParentSpanId] = psid;
+  });
+  traceId.sampled.ifPresent(sampled => {
+    headers[HttpHeaders.Sampled] = sampled ? '1' : '0';
+  });
+
+  return headers;
+}
+
+function addZipkinHeaders(req, traceId) {
+  const headers = appendZipkinHeaders(req, traceId);
+  return Object.assign({}, req, {headers});
+}
+
+*/
 
 export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
  
@@ -37,7 +68,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
       shimmer.wrap(http && http.Server && http.Server.prototype, 'emit', this.patchHttpRequest(this))
 
       debug('patching http.request function')
-      shimmer.wrap(http, 'request', this.patchOutgoingRequest(this))
+     // shimmer.wrap(http, 'request', this.patchOutgoingRequest(this))
 
       debug('patching http.ServerResponse.prototype.writeHead function')
       shimmer.wrap(http && http.ServerResponse && http.ServerResponse.prototype, 'writeHead', this.patchWriteHead(this))
@@ -59,16 +90,19 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
           // don't leak previous transaction
           traceManager.clearCurrentTrace()
         } else */ { 
-          let trace  = self.tracer.startTrace();
+          let root  = self.tracer.startRootSpan();
           //TODO: review this logic maybe and request method
-          trace.name = req.url?(url.parse(req.url).pathname||'/'):'/';
-          trace.type = 'request'
+          let method = req.method || 'GET';
+          root.name = method + ' '+ (req.url?(url.parse(req.url).pathname||'/'):'/');
+          root.type = 'request'
+
+          debug('root.name = %s, http method = $s',root.name,method)
           //trans.req = req
           //trans.res = res
           //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
 
           eos(res, function (err) {
-            if (!err) return self.tracer.endTrace()
+            if (!err) return root.end()
 
             /*if (traceManager._conf.errorOnAbortedRequests && !trans.ended) {
               var duration = Date.now() - trans._timer.start
@@ -83,7 +117,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
             // Handle case where res.end is called after an error occurred on the
             // stream (e.g. if the underlying socket was prematurely closed)
             res.on('prefinish', function () {
-              self.tracer.endTrace()
+              root.end()
             })
           })
         }
@@ -185,9 +219,9 @@ function isRequestBlacklisted (agent, req) {
       
           var result = orig.apply(this, arguments)
       
-          var trace = self.tracer.currentTrace
+          var root = self.tracer.currentRootSpan
   
-          if (trace) {
+          if (root) {
           // It shouldn't be possible for the statusCode to be falsy, but just in
           // case we're in a bad state we should avoid throwing
           //  trace.result = 'HTTP ' + (this.statusCode || '').toString()[0] + 'xx'
@@ -198,7 +232,7 @@ function isRequestBlacklisted (agent, req) {
                 if (key.toLowerCase() !== 'content-type') return false
                 if (String(headers[key]).toLowerCase().indexOf('text/event-stream') !== 0) return false
                 //debug('detected SSE response - ending trace %o', { id: trace.traceId })
-                self.tracer.endTrace()
+                root.end()
                 return true
               })
             }

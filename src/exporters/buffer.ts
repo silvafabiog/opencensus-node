@@ -19,14 +19,14 @@ import * as uuidv4 from 'uuid/v4';
 import { debug } from '../internal/util'
 import { Exporter } from './exporter'
 import { google } from 'googleapis'
-import { Trace } from '../trace/model/trace'
+import { RootSpan } from '../trace/model/rootspan'
 
 const DEFAULT_BUFFER_SIZE = 3;
 
 export class Buffer {
     _exporter: Exporter;
     _bufferSize: Number;
-    _queue: Trace[];
+    _queue: RootSpan[];
 
     constructor(exporter: Exporter, size?: Number) {
         this._queue = [];
@@ -34,7 +34,7 @@ export class Buffer {
         this._exporter = exporter;
     }
 
-    public addToBuffer(trace: Trace) {
+    public addToBuffer(trace: RootSpan) {
         this._queue.push(trace);
         if (this._queue.length > this._bufferSize) {
             this.flush();
