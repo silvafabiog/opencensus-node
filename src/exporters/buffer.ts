@@ -21,6 +21,7 @@ import { Exporter } from './exporter'
 import { google } from 'googleapis'
 import { RootSpan } from '../trace/model/rootspan'
 
+// TODO: Implement default size based on application size
 const DEFAULT_BUFFER_SIZE = 3;
 
 export class Buffer {

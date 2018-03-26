@@ -25,7 +25,6 @@ import { RootSpan } from '../../trace/model/rootspan'
 import { Buffer } from '../buffer'
 
 const cloudTrace = google.cloudtrace('v1');
-const BUFFER_SIZE = 3;
 
 export class Stackdriver implements Exporter {
     projectId: string;
@@ -44,9 +43,9 @@ export class Stackdriver implements Exporter {
         this.buffer.addToBuffer(trace)
     }
 
-    public emit(traces: RootSpan[]) {
+    public emit(rootSpans: RootSpan[]) {
         let stackdriverTraces = [];
-        traces.forEach(trace => {
+        rootSpans.forEach(trace => {
             stackdriverTraces.push(this.translateTrace(trace));
         })
         this.authorize(this.publish, stackdriverTraces);
@@ -78,24 +77,6 @@ export class Stackdriver implements Exporter {
             "endTime": span.endTime
         }
     }
-
-    /* Makes sure the trace doesn't already exists
-    private addToBuffer(traceId, resource) {
-        if (!this.buffer[traceId]) {
-            this.buffer[traceId] = resource;
-        }
-        else {
-            this.buffer[traceId]['spans'].push(resource['spans'])
-        }
-    }*/
-
-    /*private emit() {
-        if (Object.keys(this.buffer).length > BUFFER_SIZE) {
-            let traceResources = Object.keys(this.buffer).map(key => this.buffer[key]);
-            this.authorize(this.publish, traceResources);
-            this.buffer = {};
-        }
-    }*/
 
     private publish(projectId, authClient, stackdriverTraces) {
         let request = {
