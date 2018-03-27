@@ -28,19 +28,9 @@ const cloudTrace = google.cloudtrace('v1');
 
 export class Stackdriver implements Exporter {
     projectId: string;
-    buffer: Buffer;
 
     constructor(options: StackdriverOptions) {
         this.projectId = options.projectId;
-        this.buffer = new Buffer(this);
-    }
-
-    public onEndSpan(rootSpan: RootSpan) {
-        this.writeTrace(rootSpan);
-    }
-
-    public writeTrace(trace: RootSpan) {
-        this.buffer.addToBuffer(trace)
     }
 
     public emit(rootSpans: RootSpan[]) {

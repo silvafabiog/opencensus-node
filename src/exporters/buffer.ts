@@ -20,19 +20,25 @@ import { debug } from '../internal/util'
 import { Exporter } from './exporter'
 import { google } from 'googleapis'
 import { RootSpan } from '../trace/model/rootspan'
+import { OnEndSpanEventListener } from '../trace/types/tracetypes'
+import { ExporterOptions } from './exporterOptions';
 
 // TODO: Implement default size based on application size
 const DEFAULT_BUFFER_SIZE = 3;
 
-export class Buffer {
+export class Buffer implements OnEndSpanEventListener {
     _exporter: Exporter;
     _bufferSize: Number;
     _queue: RootSpan[];
 
-    constructor(exporter: Exporter, size?: Number) {
+    constructor(exporter: Exporter, bufferSize?: number) {
         this._queue = [];
-        this._bufferSize = size || DEFAULT_BUFFER_SIZE;
+        this._bufferSize = bufferSize || DEFAULT_BUFFER_SIZE;
         this._exporter = exporter;
+    }
+
+    onEndSpan(span) {
+        this.addToBuffer(span);
     }
 
     public addToBuffer(trace: RootSpan) {
