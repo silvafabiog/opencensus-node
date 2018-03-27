@@ -27,18 +27,30 @@ import { ExporterOptions } from './exporterOptions';
 const DEFAULT_BUFFER_SIZE = 3;
 
 export class Buffer implements OnEndSpanEventListener {
-    _exporter: Exporter;
+    _exporters: Exporter[];
     _bufferSize: Number;
     _queue: RootSpan[];
 
-    constructor(exporter: Exporter, bufferSize?: number) {
+    constructor(bufferSize?: number) {
         this._queue = [];
         this._bufferSize = bufferSize || DEFAULT_BUFFER_SIZE;
-        this._exporter = exporter;
+        this._exporters = [];
+        return this;
     }
 
-    onEndSpan(span) {
+    public setBufferSize(bufferSize: number) {
+        this._bufferSize = bufferSize;
+        return this;
+    }
+
+    public registerExporter(exporter: Exporter) {
+        this._exporters.push(exporter);
+        return this;
+    }
+
+    public onEndSpan(span) {
         this.addToBuffer(span);
+        return this;
     }
 
     public addToBuffer(trace: RootSpan) {
@@ -46,10 +58,14 @@ export class Buffer implements OnEndSpanEventListener {
         if (this._queue.length > this._bufferSize) {
             this.flush();
         }
+        return this;
     }
 
     private flush() {
-        this._exporter.emit(this._queue)
+        this._exporters.forEach(exporter => {
+            exporter.emit(this._queue)
+        })
         this._queue = [];
+        return this;
     }
 }

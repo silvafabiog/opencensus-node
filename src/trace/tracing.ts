@@ -54,12 +54,14 @@ export class Tracing {
     constructor() {
         this._tracer = new Tracer();
         this.pluginLoader = new PluginLoader(this._tracer);
-        this._exporter = new ConsoleLogExporter();
-        this._buffer = new Buffer(this._exporter)
-        this._tracer.registerEndSpanListener(this._buffer);
     }
 
     public start(): Tracing {
+        if (this._tracer.getEventListeners.length > 0) {
+            this._exporter = new ConsoleLogExporter();
+            let buffer = new Buffer().registerExporter(this._exporter);
+            this._tracer.registerEndSpanListener(buffer);
+        }
         this.pluginLoader.loadPlugins(this.PLUGINS);
         this._active = true;
         this._tracer.start();
@@ -81,9 +83,10 @@ export class Tracing {
 
     public addStackdriver(projectId: string, bufferSize?: number): Tracing {
         let stackdriverOptions = new StackdriverOptions(projectId);
-        this._exporter = new Stackdriver(stackdriverOptions);
-        this._buffer = new Buffer(this._exporter, bufferSize)
-        this._tracer.registerEndSpanListener(this._buffer);
+        let exporter = new Stackdriver(stackdriverOptions);
+
+        let buffer = new Buffer(bufferSize).registerExporter(exporter);
+        this._tracer.registerEndSpanListener(buffer);
         return this;
     }
 
