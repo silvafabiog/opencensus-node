@@ -18,8 +18,10 @@ import {ExporterOptions} from "../exporterOptions"
 
 export class StackdriverOptions implements ExporterOptions {
     projectId: string;
+    bufferSize?: number;
 
-    constructor(projectId: string) {
+    constructor(projectId: string, bufferSize?: number) {
         this.projectId = projectId;
+        this.bufferSize = bufferSize;
     }
 }

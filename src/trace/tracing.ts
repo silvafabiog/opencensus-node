@@ -76,8 +76,8 @@ export class Tracing {
         return this._exporter;
     }
 
-    public addStackdriver(projectId: string): Tracing {
-        let stackdriverOptions = new StackdriverOptions(projectId);
+    public addStackdriver(projectId: string, bufferSize?: number): Tracing {
+        let stackdriverOptions = new StackdriverOptions(projectId, bufferSize);
         this._exporter = new Stackdriver(stackdriverOptions);
         this._tracer.registerEndSpanListener(this._exporter);
         return this;

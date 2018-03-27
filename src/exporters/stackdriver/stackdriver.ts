@@ -32,7 +32,7 @@ export class Stackdriver implements Exporter {
 
     constructor(options: StackdriverOptions) {
         this.projectId = options.projectId;
-        this.buffer = new Buffer(this);
+        this.buffer = new Buffer(this, options.bufferSize);
     }
 
     public onEndSpan(rootSpan: RootSpan) {
