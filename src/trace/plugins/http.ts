@@ -75,42 +75,61 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
         return http
     }
+ patchHttpRequest(self: HttpPlugin) {
+  return function (orig) {
+    return function (event, req, res) {
+        debug('intercepted request event %s', event)
+        if (event === 'request') {
+          debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
+ 
 
+        // TODO: Don't trace ourselves lest we get into infinite loops
+        /*if (isSelftRequest(options, api)) {
+          return request(options, callback);
+        } else  { */
+                let method = req.method || 'GET';
+                let name = method + ' '+ (req.url?(url.parse(req.url).pathname||'/'):'/');
 
-    patchHttpRequest(self: HttpPlugin) {
-        return function (orig) {
-            return function (event, req, res) {
-                debug('intercepted request event %s', event)
-                if (event === 'request') {
-                    debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
-                    let method = req.method || 'GET';
-                    
-                    let span = self.tracer.startRootSpan();
-                    span.name = method + ' ' + (req.url ? (url.parse(req.url).pathname || '/') : '/');
-                    span.type = 'request'
-                    
-                    //debug('span.name = %s, http method = $s', span.name, method)
+                //TODO: Add propagation
+                return self.tracer.startRootSpan({name:name}, (root) => {
+                  
+                  if(!root) {
+                    return orig.apply(this, arguments)
+                  }
 
-                    // TODO Check if header exists, if so, checks if TraceContext exists
-                    // TODO Decide between creating a rootSpan or span (passing the context)
-                    // TODO Make sure you are sending the info right
-                    //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
-                    
-                    eos(res, function (err) {
-                        if (!err) return span.end()
-                        // Handle case where res.end is called after an error occurred on the
-                        // stream (e.g. if the underlying socket was prematurely closed)
-                        res.on('prefinish', function () {
-                            span.end()
+                  //TODO: review this logic maybe and request method
+                  root.type = 'request'
+                  debug('root.name = %s, http method = $s',root.name,method)
+
+                  //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
+
+                  eos(res, function (err) {
+                    if (!err) return root.end()
+
+                    /*if (traceManager._conf.errorOnAbortedRequests && !trans.ended) {
+                      var duration = Date.now() - trans._timer.start
+                      if (duration > traceManager._conf.abortedErrorThreshold) {
+                        traceManager.captureError('Socket closed with active HTTP request (>' + (traceManager._conf.abortedErrorThreshold / 1000) + ' sec)', {
+                          request: req,
+                          extra: { abortTime: duration }
                         })
-                    })
+                      }
+                    } */
 
-                    //debug('REQUEST ARGUMENTS | patch http request', arguments)
-                }
-                return orig.apply(this, arguments)
-            }
+                    // Handle case where res.end is called after an error occurred on the
+                    // stream (e.g. if the underlying socket was prematurely closed)
+                    res.on('prefinish', function () {
+                      root.end()
+                    })
+                  })
+                  return orig.apply(this, arguments)
+           })
+        } else {
+          return orig.apply(this, arguments)
         }
+      }
     }
+  }
 
     patchOutgoingRequest(self: HttpPlugin) {
         return function (orig) {
