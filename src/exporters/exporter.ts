@@ -20,28 +20,34 @@ import { RootSpan } from '../trace/model/rootspan'
 import { OnEndSpanEventListener } from '../trace/types/tracetypes'
 
 export interface Exporter {
-    emit(rootSpans: RootSpan[]);
+    writeTrace(root: RootSpan);
 }
 
 export class NoopExporter implements Exporter {
-    emit(rootSpans: RootSpan[]) { }
+
+    writeTrace(root: RootSpan) {}
+    onEndSpan(root:RootSpan){}
 }
 
-export class ConsoleLogExporter implements Exporter {
-    emit(rootSpans: RootSpan[]) {
-        rootSpans.forEach(root => {
-            let rootStr: string = (`
-            RootSpan: {traceId: ${root.traceId}, spanId: ${root.id}, name: ${root.name} }
-            `);
-            let spansStr: string[] =
-                root.spans.map((span) => `   ChildSpan: {traceId: ${span.traceId}, spanId: ${span.id}, name: ${span.name} }
-            `)
-            let result: string[] = [];
 
-            result.push(rootStr)
-            result.push(`${spansStr.join("")}`)
-            console.log(`${result}`)
-        })
+export class ConsoleLogExporter implements Exporter {
+
+    writeTrace(root: RootSpan) {
+        let rootStr: string = ( `
+        RootSpan: {writing RootSpan: traceId: ${root.traceId}, spanId: ${root.id}, name: ${root.name} }
+        `);
+        let spansStr: string[] = 
+           root.spans.map((span)=>`   ChildSpan: {traceId: ${span.traceId}, spanId: ${span.id}, name: ${span.name} }
+        `)
+        let result:string[] = [];
+
+        result.push(rootStr)
+        result.push(`${spansStr.join("")}`)
+        console.log(`${result}`)
+    }
+
+    onEndSpan(root:RootSpan){
+        this.writeTrace(root)
     }
 }
 
