@@ -15,11 +15,11 @@
  */
 
 
-import { ExporterOptions } from './exporterOptions'
+import {ExporterOptions} from './exporterOptions'
 import { RootSpan } from '../trace/model/rootspan'
 import { OnEndSpanEventListener } from '../trace/types/tracetypes'
 
-export interface Exporter {
+export interface Exporter extends OnEndSpanEventListener  {
     writeTrace(root: RootSpan);
 }
 
@@ -28,7 +28,6 @@ export class NoopExporter implements Exporter {
     writeTrace(root: RootSpan) {}
     onEndSpan(root:RootSpan){}
 }
-
 
 export class ConsoleLogExporter implements Exporter {
 
