@@ -80,76 +80,59 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
  patchHttpRequest(self: HttpPlugin) {
   return function (orig) {
     return function (event, req, res) {
-      debug('intercepted request event %s', event)
-      if (event === 'request') {
-        debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
+        debug('intercepted request event %s', event)
+        if (event === 'request') {
+          debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
  
 
-       /* if (isRequestBlacklisted(traceManager, req)) {
-          debug('ignoring blacklisted request to %s', req.url)
-          // don't leak previous transaction
-          traceManager.clearCurrentTrace()
-        } else */ { 
-          let root  = self.tracer.startRootSpan();
-          //TODO: review this logic maybe and request method
-          let method = req.method || 'GET';
-          root.name = method + ' '+ (req.url?(url.parse(req.url).pathname||'/'):'/');
-          root.type = 'request'
+        // TODO: Don't trace ourselves lest we get into infinite loops
+        /*if (isSelftRequest(options, api)) {
+          return request(options, callback);
+        } else  { */
+                let method = req.method || 'GET';
+                let name = method + ' '+ (req.url?(url.parse(req.url).pathname||'/'):'/');
 
-          debug('root.name = %s, http method = $s',root.name,method)
-          //trans.req = req
-          //trans.res = res
-          //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
+                //TODO: Add propagation
+                return self.tracer.startRootSpan({name:name}, (root) => {
+                  
+                  if(!root) {
+                    return orig.apply(this, arguments)
+                  }
 
-          eos(res, function (err) {
-            if (!err) return root.end()
+                  //TODO: review this logic maybe and request method
+                  root.type = 'request'
+                  debug('root.name = %s, http method = $s',root.name,method)
 
-            /*if (traceManager._conf.errorOnAbortedRequests && !trans.ended) {
-              var duration = Date.now() - trans._timer.start
-              if (duration > traceManager._conf.abortedErrorThreshold) {
-                traceManager.captureError('Socket closed with active HTTP request (>' + (traceManager._conf.abortedErrorThreshold / 1000) + ' sec)', {
-                  request: req,
-                  extra: { abortTime: duration }
-                })
-              }
-            } */
+                  //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
 
-            // Handle case where res.end is called after an error occurred on the
-            // stream (e.g. if the underlying socket was prematurely closed)
-            res.on('prefinish', function () {
-              root.end()
-            })
-          })
+                  eos(res, function (err) {
+                    if (!err) return root.end()
+
+                    /*if (traceManager._conf.errorOnAbortedRequests && !trans.ended) {
+                      var duration = Date.now() - trans._timer.start
+                      if (duration > traceManager._conf.abortedErrorThreshold) {
+                        traceManager.captureError('Socket closed with active HTTP request (>' + (traceManager._conf.abortedErrorThreshold / 1000) + ' sec)', {
+                          request: req,
+                          extra: { abortTime: duration }
+                        })
+                      }
+                    } */
+
+                    // Handle case where res.end is called after an error occurred on the
+                    // stream (e.g. if the underlying socket was prematurely closed)
+                    res.on('prefinish', function () {
+                      root.end()
+                    })
+                  })
+                  return orig.apply(this, arguments)
+           })
+        } else {
+          return orig.apply(this, arguments)
         }
       }
-
-      return orig.apply(this, arguments)
     }
   }
-}
-/*
-function isRequestBlacklisted (agent, req) {
-  var i
 
-  for (i = 0; i < agent._conf.ignoreUrlStr.length; i++) {
-    if (agent._conf.ignoreUrlStr[i] === req.url) return true
-  }
-  for (i = 0; i < agent._conf.ignoreUrlRegExp.length; i++) {
-    if (agent._conf.ignoreUrlRegExp[i].test(req.url)) return true
-  }
-
-  var ua = req.headers['user-agent']
-  if (!ua) return false
-
-  for (i = 0; i < agent._conf.ignoreUserAgentStr.length; i++) {
-    if (ua.indexOf(agent._conf.ignoreUserAgentStr[i]) === 0) return true
-  }
-  for (i = 0; i < agent._conf.ignoreUserAgentRegExp.length; i++) {
-    if (agent._conf.ignoreUserAgentRegExp[i].test(ua)) return true
-  }
-
-  return false
-}*/
 
     patchOutgoingRequest (self: HttpPlugin) {
       var spanType = 'ext.' + self.moduleName + '.http'

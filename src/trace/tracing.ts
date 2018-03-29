@@ -41,6 +41,8 @@ export const defaultConfig: TracerConfig = {
     sampleRate: 1.0
 }
 
+//TODO: Add comments 
+
 export class Tracing {
 
     private _active: Boolean;
@@ -49,7 +51,7 @@ export class Tracing {
     private _buffer: Buffer;
     private pluginLoader: PluginLoader;
 
-    readonly PLUGINS = ['http', 'https', 'mongodb-core', 'express']
+    readonly PLUGINS = ['http', 'https', 'mongodb-core']
 
     constructor() {
         this._tracer = new Tracer();
