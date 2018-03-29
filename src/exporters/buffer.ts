@@ -20,19 +20,37 @@ import { debug } from '../internal/util'
 import { Exporter } from './exporter'
 import { google } from 'googleapis'
 import { RootSpan } from '../trace/model/rootspan'
+import { OnEndSpanEventListener } from '../trace/types/tracetypes'
+import { ExporterOptions } from './exporterOptions';
 
 // TODO: Implement default size based on application size
 const DEFAULT_BUFFER_SIZE = 0;
 
-export class Buffer {
-    _exporter: Exporter;
+export class Buffer implements OnEndSpanEventListener {
+    _exporters: Exporter[];
     _bufferSize: Number;
     _queue: RootSpan[];
 
-    constructor(exporter: Exporter, size?: Number) {
+    constructor(bufferSize?: number) {
         this._queue = [];
-        this._bufferSize = size || DEFAULT_BUFFER_SIZE;
-        this._exporter = exporter;
+        this._bufferSize = bufferSize || DEFAULT_BUFFER_SIZE;
+        this._exporters = [];
+        return this;
+    }
+
+    public setBufferSize(bufferSize: number) {
+        this._bufferSize = bufferSize;
+        return this;
+    }
+
+    public registerExporter(exporter: Exporter) {
+        this._exporters.push(exporter);
+        return this;
+    }
+
+    public onEndSpan(span) {
+        this.addToBuffer(span);
+        return this;
     }
 
     public addToBuffer(trace: RootSpan) {
@@ -40,10 +58,14 @@ export class Buffer {
         if (this._queue.length > this._bufferSize) {
             this.flush();
         }
+        return this;
     }
 
     private flush() {
-        this._exporter.emit(this._queue)
+        this._exporters.forEach(exporter => {
+            exporter.emit(this._queue)
+        })
         this._queue = [];
+        return this;
     }
 }

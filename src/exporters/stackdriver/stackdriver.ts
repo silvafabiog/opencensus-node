@@ -28,25 +28,18 @@ const cloudTrace = google.cloudtrace('v1');
 
 export class Stackdriver implements Exporter {
     projectId: string;
-    buffer: Buffer;
 
     constructor(options: StackdriverOptions) {
         this.projectId = options.projectId;
-        this.buffer = new Buffer(this, options.bufferSize);
-    }
-
-    public onEndSpan(rootSpan: RootSpan) {
-        this.writeTrace(rootSpan);
-    }
-
-    public writeTrace(trace: RootSpan) {
-        this.buffer.addToBuffer(trace)
     }
 
     public emit(rootSpans: RootSpan[]) {
         let stackdriverTraces = [];
         rootSpans.forEach(trace => {
-            stackdriverTraces.push(this.translateTrace(trace));
+            // Do not track ourselves
+            if (trace.name.indexOf('googleapis') < 0) {
+                stackdriverTraces.push(this.translateTrace(trace));
+            }
         })
         this.authorize(this.publish, stackdriverTraces);
     }
