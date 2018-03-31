@@ -105,6 +105,8 @@ export class Zipkin implements Exporter {
         req.end();
     }
 
+    emit(rootSpans: RootSpan[]) {}
+
     public onEndSpan(rootSpan: RootSpan) {
         this.writeTrace(rootSpan);
     }

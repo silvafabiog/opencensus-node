@@ -91,6 +91,5 @@ export class Tracing {
         this._tracer.registerEndSpanListener(this._exporter);
         return this;
     }
-
 }
 
