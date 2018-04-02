@@ -75,73 +75,54 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
         return http
     }
- patchHttpRequest(self: HttpPlugin) {
-  return function (orig) {
-    return function (event, req, res) {
-        debug('intercepted request event %s', event)
-        if (event === 'request') {
-          debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
- 
 
-        // TODO: Don't trace ourselves lest we get into infinite loops
-        /*if (isSelftRequest(options, api)) {
-          return request(options, callback);
-        } else  { */
-                let method = req.method || 'GET';
-                let name = method + ' '+ (req.url?(url.parse(req.url).pathname||'/'):'/');
+    patchHttpRequest(self: HttpPlugin) {
+        return function (orig) {
+            return function (event, req, res) {
+                debug('intercepted request event %s', event)
+                if (event === 'request') {
+                    debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
+                    
+                    let options = self.getOptionsFromHeaders(arguments[1].headers) || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getOptions();
+                    debug('REQUEST | patch emit request', arguments[1].headers)
+                    
+                    return self.tracer.startRootSpan(options, (root) => {                        
+                        let method = req.method || 'GET';
+                        root.name = method + ' ' + (req.url ? (url.parse(req.url).pathname || '/') : '/');
+                        root.type = 'request'
 
-                //TODO: Add propagation
-                return self.tracer.startRootSpan({name:name}, (root) => {
-                  
-                  if(!root) {
-                    return orig.apply(this, arguments)
-                  }
+                        if (!root) {
+                            return orig.apply(this, arguments)
+                        }
 
-                  //TODO: review this logic maybe and request method
-                  root.type = 'request'
-                  debug('root.name = %s, http method = $s',root.name,method)
+                        //TODO: review this logic maybe and request method
+                        debug('root.name = %s, http method = $s', root.name, method)
 
-                  //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
+                        eos(res, function (err) {
+                            if (!err) {
+                                return root.end()
+                            }
 
-                  eos(res, function (err) {
-                    if (!err) return root.end()
-
-                    /*if (traceManager._conf.errorOnAbortedRequests && !trans.ended) {
-                      var duration = Date.now() - trans._timer.start
-                      if (duration > traceManager._conf.abortedErrorThreshold) {
-                        traceManager.captureError('Socket closed with active HTTP request (>' + (traceManager._conf.abortedErrorThreshold / 1000) + ' sec)', {
-                          request: req,
-                          extra: { abortTime: duration }
+                            // Handle case where res.end is called after an error occurred on the
+                            // stream (e.g. if the underlying socket was prematurely closed)
+                            res.on('prefinish', function () {
+                                root.end()
+                            })
                         })
-                      }
-                    } */
-
-                    // Handle case where res.end is called after an error occurred on the
-                    // stream (e.g. if the underlying socket was prematurely closed)
-                    res.on('prefinish', function () {
-                      root.end()
+                        return orig.apply(this, arguments)
                     })
-                  })
-                  return orig.apply(this, arguments)
-           })
-        } else {
-          return orig.apply(this, arguments)
+                } else {
+                    return orig.apply(this, arguments)
+                }
+            }
         }
-      }
     }
-  }
 
     patchOutgoingRequest(self: HttpPlugin) {
         return function (orig) {
             return function () {
-                let span = self.tracer.startSpan() || self.tracer.startRootSpan();
-
-                let b3Header = {
-                    'X-B3-TraceId': span.traceId,
-                    'X-B3-ParentSpanId': span.traceId,    // TODO get parent span
-                    'X-B3-SpanId': span.id,
-                    'X-B3-Sampled': true                  // TODO get sample decision
-                }
+                //let span = self.tracer.startSpan() || self.tracer.startRootSpan();
+                //let span = self.tracer.startSpan()
 
                 // Parses string url into url object
                 if (arguments[0] instanceof String) {
@@ -149,53 +130,68 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                 }
 
                 // Do not track ourselves
-                if (arguments[0].hostname.indexOf('googleapis') < 0) {
-                    if (!arguments[0].headers) {
-                        arguments[0].headers = b3Header;
-                    } else {
-                        arguments[0].headers = Object.assign(arguments[0]['headers'], b3Header);
-                    }
-                    //debug('REQUEST ARGUMENTS | patch outgoing request', arguments)
+                if (arguments[0].hostname && arguments[0].hostname.indexOf('googleapis') > 0) {
+                    return orig.apply(this, arguments);
                 }
 
-                let req = orig.apply(this, arguments);
+                // TODO Review this logic
+                let options = self.getOptionsFromHeaders(arguments[0].headers) || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getOptions();
+                
+                return self.tracer.startRootSpan(options, (span) => {
 
-                span.name = req.method + ' ' + url.parse(req.path).pathname;
-                span.type = 'request/get';
+                    span.name = orig.name + ' ' + arguments[0].pathname;
+                    span.type = orig.name;
+                    debug('HTTP | patch outgoing request', orig.name)
 
-                let id = span.id && span.traceId
+                    let b3Header = {
+                        'X-B3-TraceId': span.traceId,
+                        'X-B3-ParentSpanId': span.getParentSpanId(),
+                        'X-B3-SpanId': span.id,
+                        'X-B3-Sampled': true                      // TODO get sample decision
+                    }
 
-                debug('\n\nintercepted call to %s.request/get %o', self.moduleName, { id: id })
+                    arguments[0].headers = Object.assign(arguments[0].headers || {}, b3Header);
+                    debug('REQUEST ARGUMENTS | patch outgoing request', arguments)
 
-                req.on('response', onresponse)
-                return req
+                    let req = orig.apply(this, arguments);
 
-                function onresponse(res) {
-                    debug('intercepted http.ClientRequest response event %o', { id: id })
+                    // span.name = req.method + ' ' + url.parse(req.path).pathname;
+                    // span.type = 'request/get';
 
-                    // Inspired by:
-                    // https://github.com/nodejs/node/blob/9623ce572a02632b7596452e079bba066db3a429/lib/events.js#L258-L274
-                    if (res.prependListener) {
-                        // Added in Node.js 6.0.0
-                        res.prependListener('end', onEnd)
-                    } else {
-                        var existing = res._events && res._events.end
-                        if (!existing) {
-                            res.on('end', onEnd)
+                    let id = span.id && span.traceId
+
+                    debug('\n\nintercepted call to %s.request/get %o', self.moduleName, { id: id })
+
+                    req.on('response', onresponse)
+                    return req
+
+                    function onresponse(res) {
+                        debug('intercepted http.ClientRequest response event %o', { id: id })
+
+                        // Inspired by:
+                        // https://github.com/nodejs/node/blob/9623ce572a02632b7596452e079bba066db3a429/lib/events.js#L258-L274
+                        if (res.prependListener) {
+                            // Added in Node.js 6.0.0
+                            res.prependListener('end', onEnd)
                         } else {
-                            if (typeof existing === 'function') {
-                                res._events.end = [onEnd, existing]
+                            var existing = res._events && res._events.end
+                            if (!existing) {
+                                res.on('end', onEnd)
                             } else {
-                                existing.unshift(onEnd)
+                                if (typeof existing === 'function') {
+                                    res._events.end = [onEnd, existing]
+                                } else {
+                                    existing.unshift(onEnd)
+                                }
                             }
                         }
-                    }
 
-                    function onEnd() {
-                        debug('intercepted http.IncomingMessage end event %o', { id: id })
-                        span.end()
+                        function onEnd() {
+                            debug('intercepted http.IncomingMessage end event %o', { id: id })
+                            span.end()
+                        }
                     }
-                }
+                })
             }
         }
     }
@@ -230,6 +226,20 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                 return result
             }
         }
+    }
+
+    getOptionsFromHeaders(headers) {
+        if (headers) {
+            return {
+                name: headers['x-b3-traceid'],
+                traceContext: {
+                    traceId: headers['x-b3-traceid'],
+                    spanId: headers['x-b3-spanid'],
+                    parentSpanId: headers['x-b3-parentSpanId']
+                }
+            }
+        }
+        return null;
     }
 
 }
