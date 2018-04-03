@@ -52,11 +52,11 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                 debug('intercepted request event %s', event)
                 if (event === 'request') {
                     debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
-                    
+
                     let options = self.getOptionsFromHeaders(arguments[1].headers) || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getOptions();
                     debug('REQUEST | patch emit request', arguments[1].headers)
-                    
-                    return self.tracer.startRootSpan(options, (root) => {                        
+
+                    return self.tracer.startRootSpan(options, (root) => {
                         let method = req.method || 'GET';
                         root.name = method + ' ' + (req.url ? (url.parse(req.url).pathname || '/') : '/');
                         root.type = 'request'
@@ -68,23 +68,25 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                         //TODO: review this logic maybe and request method
                         debug('root.name = %s, http method = $s', root.name, method)
 
-                  self.tracer.wrapEmitter(req);
-                  self.tracer.wrapEmitter(res);
+                        self.tracer.wrapEmitter(req);
+                        self.tracer.wrapEmitter(res);
 
-                  //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
+                        //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
 
-                  eos(res, function (err) {
-                    if (!err) return root.end()
+                        eos(res, function (err) {
+                            if (!err) return root.end()
 
-                    //TODO improve erro handleing
-                    /*if (!root.ended) {
-                      var duration = Date.now() - root.clock.start
-                      if (duration > tracer.abortedErrorThreshold) {
-                        tracer.captureError('Socket closed with active HTTP request (>' + (tracer.abortedErrorThreshold / 1000) + ' sec)', {
-                          request: req,
-                          extra: { abortTime: duration }
+                            //TODO improve erro handleing
+                            /*if (!root.ended) {
+                              var duration = Date.now() - root.clock.start
+                              if (duration > tracer.abortedErrorThreshold) {
+                                tracer.captureError('Socket closed with active HTTP request (>' + (tracer.abortedErrorThreshold / 1000) + ' sec)', {
+                                  request: req,
+                                  extra: { abortTime: duration }
+                                })
+                                return orig.apply(this, arguments)
+                            })*/
                         })
-                        return orig.apply(this, arguments)
                     })
                 } else {
                     return orig.apply(this, arguments)
@@ -111,7 +113,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
                 // TODO Review this logic
                 let options = self.getOptionsFromHeaders(arguments[0].headers) || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getOptions();
-                
+
                 return self.tracer.startRootSpan(options, (span) => {
 
                     span.name = orig.name + ' ' + arguments[0].pathname;
