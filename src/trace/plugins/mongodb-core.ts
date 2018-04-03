@@ -56,25 +56,26 @@ class MongoDBPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
     return mongodb
   }
 
-  patchCommand(self: MongoDBPlugin) {
-    return function (orig) {
-      return function (ns, cmd) {
-        var trace = self.tracer.currentRootSpan
-        var id = trace && trace.id
-        var span
+   patchCommand (self: MongoDBPlugin) {
+    return function (orig) { 
+        return function (ns, cmd) {
+          var root = self.tracer.currentRootSpan
+          var id = root && root.id
+          var span
 
-        debug('intercepted call to mongodb-core.Server.prototype.command %o', { id: id, ns: ns })
+          //debug('New mongodb span for rootSpan %o', { traceId: root.traceId, name: root.name })
+          debug('intercepted call to mongodb-core.Server.prototype.command %o', { id: id, ns: ns })
 
-        if (trace && arguments.length > 0) {
-          var index = arguments.length - 1
-          var cb = arguments[index]
-          if (typeof cb === 'function') {
-            var type
-            if (cmd.findAndModify) type = 'findAndModify'
-            else if (cmd.createIndexes) type = 'createIndexes'
-            else if (cmd.ismaster) type = 'ismaster'
-            else if (cmd.count) type = 'count'
-            else type = 'command'
+          if (root && arguments.length > 0) {
+            var index = arguments.length - 1
+            var cb = arguments[index]
+            if (typeof cb === 'function') {
+              var type
+              if (cmd.findAndModify) type = 'findAndModify'
+              else if (cmd.createIndexes) type = 'createIndexes'
+              else if (cmd.ismaster) type = 'ismaster'
+              else if (cmd.count) type = 'count'
+              else type = 'command'
 
             arguments[index] = wrappedCallback
             span = self.tracer.startSpan(ns + '.' + type, self.SPAN_MONGODB_QUERY_TYPE)
@@ -95,19 +96,21 @@ class MongoDBPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
   patchQuery(self: MongoDBPlugin) {
     return function (orig, name) {
-      return function (ns) {
-        var trace = self.tracer.currentRootSpan
-        var id = trace && trace.id
-        var span
+        return function  (ns) {
+          var root = self.tracer.currentRootSpan
+          var id = root && root.id
+          var span
 
-        debug('intercepted call to mongodb-core.Server.prototype.%s %o', name, { id: id, ns: ns })
+         // debug('New mongodb span for rootSpan %o', { traceId: root.traceId, name: root.name })
+          debug('intercepted call to mongodb-core.Server.prototype.%s %o', name, { id: id, ns: ns })
 
-        if (trace && arguments.length > 0) {
-          var index = arguments.length - 1
-          var cb = arguments[index]
-          if (typeof cb === 'function') {
-            arguments[index] = wrappedCallback
-            span = self.tracer.startSpan(ns + '.' + name, self.SPAN_MONGODB_QUERY_TYPE)
+          if (root && arguments.length > 0) {
+            var index = arguments.length - 1
+            var cb = arguments[index]
+            if (typeof cb === 'function' ) {
+              arguments[index] = wrappedCallback
+              span = self.tracer.startSpan(ns + '.' + name,  self.SPAN_MONGODB_QUERY_TYPE)
+            }
           }
         }
 
@@ -124,18 +127,20 @@ class MongoDBPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
   patchCursor(self: MongoDBPlugin) {
     return function (orig, name) {
-      return function () {
-        var trace = self.tracer.currentRootSpan
-        var id = trace && trace.id
-        var span
+        return function  () {
+          var root = self.tracer.currentRootSpan
+          var id = root && root.id
+          var span
 
-        debug('intercepted call to mongodb-core.Cursor.prototype.%s %o', name, { id: id })
+         // debug('New mongodb span for rootSpan %o', { traceId: root.traceId, name: root.name })
+          debug('intercepted call to mongodb-core.Cursor.prototype.%s %o', name, { id: id })
 
-        if (trace && arguments.length > 0) {
-          var cb = arguments[0]
-          if (typeof cb === 'function') {
-            arguments[0] = wrappedCallback
-            span = self.tracer.startSpan(this.ns + '.' + (this.cmd.find ? 'find' : name), self.SPAN_MONGODB_QUERY_TYPE)
+          if (root && arguments.length > 0) {
+            var cb = arguments[0]
+            if (typeof cb === 'function') {
+              arguments[0] = wrappedCallback
+              span = self.tracer.startSpan(this.ns + '.' + (this.cmd.find ? 'find' : name),  self.SPAN_MONGODB_QUERY_TYPE)
+            }
           }
         }
 

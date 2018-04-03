@@ -19,15 +19,16 @@ import { Exporter } from "../exporter"
 import { ZipkinOptions } from "./options"
 import { RootSpan } from "../../trace/model/rootspan";
 import * as http from "http"
+import * as url from "url";
 import { debug } from "../../internal/util"
 
 export class Zipkin implements Exporter {
-    url: string;
-    serviceName: string;
+    private _zipkinUrl: url.UrlWithStringQuery;
+    private _serviceName: string;
 
     constructor(options: ZipkinOptions) {
-        this.url = options.url;
-        this.serviceName = options.serviceName;
+        this._zipkinUrl = url.parse(options.url);
+        this._serviceName = options.serviceName;
     }
     
     writeTrace(root: RootSpan) {
@@ -43,7 +44,7 @@ export class Zipkin implements Exporter {
             "debug": true,
             "shared": true,
             "localEndpoint": {
-                "serviceName": this.serviceName
+                "serviceName": this._serviceName
             }
         }
         spans.push(spanRoot);
@@ -60,21 +61,23 @@ export class Zipkin implements Exporter {
                 "debug": true,
                 "shared": true,
                 "localEndpoint": {
-                    "serviceName": this.serviceName
+                    "serviceName": this._serviceName
                 }
             }
             spans.push(spanObj);
         }
 
         const options = {
-            hostname: 'localhost',
-            port: 9411,
-            path: '/api/v2/spans',
+            hostname: this._zipkinUrl.hostname,
+            port: this._zipkinUrl.port,
+            path: this._zipkinUrl.path,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             }
         };
+        
+        debug('Zipkins exporter options: %o', { hostname: options.hostname,  port: options.port, path: options.path});
 
 
         const req = http.request(options, (res) => {
@@ -97,7 +100,7 @@ export class Zipkin implements Exporter {
         let spansJson: string[] = spans.map((span)=> JSON.stringify(span));
         spansJson.join("");
         let outputJson:string = `[${spansJson}]`
-        debug('Zipkins span list Json: %s', outputJson);
+     //   debug('Zipkins span list Json: %s', outputJson);
         req.write(outputJson);
         req.end();
     }
