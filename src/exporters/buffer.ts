@@ -24,48 +24,84 @@ import { OnEndSpanEventListener } from '../trace/types/tracetypes'
 import { ExporterOptions } from './exporterOptions'; 
  
 // TODO: Implement default size based on application size 
-const DEFAULT_BUFFER_SIZE = 3; 
+const DEFAULT_BUFFER_SIZE = 3;
+const DEFAULT_BUFFER_TIMEOUT = 20000; 
  
 export class Buffer implements OnEndSpanEventListener { 
-    _exporters: Exporter[]; 
-    _bufferSize: Number; 
-    _queue: RootSpan[]; 
+    private exporters: Exporter[]; 
+    private bufferSize: Number; 
+    private queue: RootSpan[]; 
+    private bufferTimeout: number;
+    private resetTimeout: boolean;
+    private bufferTimeoutInProgress: boolean;
  
-    constructor(bufferSize?: number) { 
-        this._queue = []; 
-        this._bufferSize = bufferSize || DEFAULT_BUFFER_SIZE; 
-        this._exporters = []; 
+    constructor(bufferSize?: number, bufferTimeout?: number) { 
+        this.queue = []; 
+        this.bufferSize = bufferSize || DEFAULT_BUFFER_SIZE; 
+        this.bufferTimeout = bufferTimeout || DEFAULT_BUFFER_TIMEOUT;
+        this.exporters = [];
+        this.resetTimeout = false;
+        this.bufferTimeoutInProgress = false;
         return this; 
     } 
  
-    public setBufferSize(bufferSize: number) { 
-        this._bufferSize = bufferSize; 
+    setBufferSize(bufferSize: number) { 
+        this.bufferSize = bufferSize; 
         return this; 
     } 
  
-    public registerExporter(exporter: Exporter) { 
-        this._exporters.push(exporter); 
+    registerExporter(exporter: Exporter) { 
+        this.exporters.push(exporter); 
         return this; 
     } 
  
-    public onEndSpan(span) { 
+    onEndSpan(span) { 
         this.addToBuffer(span); 
         return this; 
     } 
  
-    public addToBuffer(trace: RootSpan) { 
-        this._queue.push(trace); 
-        if (this._queue.length > this._bufferSize) { 
+    addToBuffer(trace: RootSpan) { 
+        this.queue.push(trace); 
+        debug("BUFFER: added new trace");
+        if (this.queue.length > this.bufferSize) { 
             this.flush(); 
-        } 
-        return this; 
-    } 
+        } if (this.bufferTimeoutInProgress) {            
+            this.resetBufferTimeout();
+        } else {
+            this.setBufferTimeout();
+        }
+        return this;
+    }
+
+    private resetBufferTimeout() {
+        debug("BUFFER: reset timeout");
+        this.resetTimeout = true;        
+    }
+    
+    private setBufferTimeout() {
+        debug("BUFFER: set timerout");
+        this.bufferTimeoutInProgress = true;
+
+        setTimeout(() => {
+            if (this.queue.length == 0) {
+                return;
+            }
+            
+            if(this.resetTimeout) {
+                this.resetTimeout = false;
+                this.setBufferTimeout();
+            } else {
+                this.bufferTimeoutInProgress = false;
+                this.flush();
+            }
+        }, this.bufferTimeout);
+    }
  
     private flush() { 
-        this._exporters.forEach(exporter => { 
-            exporter.emit(this._queue) 
+        this.exporters.forEach(exporter => { 
+            exporter.emit(this.queue) 
         }) 
-        this._queue = []; 
+        this.queue = []; 
         return this; 
     } 
 }
