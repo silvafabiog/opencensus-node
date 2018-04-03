@@ -68,8 +68,8 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                         //TODO: review this logic maybe and request method
                         debug('root.name = %s, http method = $s', root.name, method)
 
-                        self.tracer.wrapEmitter(req);
-                        self.tracer.wrapEmitter(res);
+                        // self.tracer.wrapEmitter(req);
+                        // self.tracer.wrapEmitter(res);
 
                         //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
 
@@ -87,6 +87,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                                 return orig.apply(this, arguments)
                             })*/
                         })
+                        return orig.apply(this, arguments)
                     })
                 } else {
                     return orig.apply(this, arguments)

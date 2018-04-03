@@ -26,6 +26,7 @@ import { ZipkinOptions } from '../exporters/zipkin/options'
 import { Tracer } from './model/tracer'
 import { ExporterOptions } from '../exporters/exporterOptions';
 import { Exporter, NoopExporter, ConsoleLogExporter } from '../exporters/exporter'
+import { Buffer } from '../exporters/buffer';
 
 export type Func<T> = (...args: any[]) => T;
 
@@ -54,11 +55,14 @@ export class Tracing {
     constructor() {
         this._tracer = new Tracer();
         this.pluginLoader = new PluginLoader(this._tracer);
-        //if(debug)
-        this._tracer.registerEndSpanListener(new ConsoleLogExporter());
     }
 
     public start(): Tracing {
+        if (this._tracer.getEventListeners.length > 0) { 
+            this._exporter = new ConsoleLogExporter(); 
+            let buffer = new Buffer().registerExporter(this._exporter); 
+            this._tracer.registerEndSpanListener(buffer); 
+        } 
         this.pluginLoader.loadPlugins(this.PLUGINS);
         this._active = true;
         this._tracer.start();
@@ -78,18 +82,20 @@ export class Tracing {
         return this._exporter;
     }
 
-    public addStackdriver(projectId: string): Tracing {
+    public addStackdriver(projectId: string, bufferSize?: number): Tracing {
         let stackdriverOptions = new StackdriverOptions(projectId);
-        this._exporter = new Stackdriver(stackdriverOptions);
-        this._tracer.registerEndSpanListener(this._exporter);
-        return this;
+        let exporter = new Stackdriver(stackdriverOptions); 
+ 
+        let buffer = new Buffer(bufferSize).registerExporter(exporter); 
+        this._tracer.registerEndSpanListener(buffer); 
+        return this; 
     }
 
-    public addZipkin(url: string, serviceName: string): Tracing {
+    /*public addZipkin(url: string, serviceName: string, bufferSize?: number): Tracing {
         let zipkinOptions = new ZipkinOptions(url, serviceName);
         this._exporter = new Zipkin(zipkinOptions);
         this._tracer.registerEndSpanListener(this._exporter);
         return this;
-    }
+    }*/
 }
 
