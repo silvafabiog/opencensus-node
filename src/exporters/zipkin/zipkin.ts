@@ -18,68 +18,37 @@
 import { Exporter } from "../exporter"
 import { ZipkinOptions } from "./options"
 import { RootSpan } from "../../trace/model/rootspan";
-import * as http from "http"
+import * as http from "http";
 import * as url from "url";
-import { debug } from "../../internal/util"
+import { debug } from "../../internal/util";
+import { Span } from "../../trace/model/span";
 
 export class Zipkin implements Exporter {
-    private _zipkinUrl: url.UrlWithStringQuery;
-    private _serviceName: string;
+    private zipkinUrl: url.UrlWithStringQuery;
+    private serviceName: string;
 
     constructor(options: ZipkinOptions) {
-        this._zipkinUrl = url.parse(options.url);
-        this._serviceName = options.serviceName;
+        this.zipkinUrl = url.parse(options.url);
+        this.serviceName = options.serviceName;
     }
-    
-    writeTrace(root: RootSpan) {
-        let spans = [];
 
-        let spanRoot = {
-            "traceId": root.traceId,
-            "name": root.name,
-            "id": root.id,
-            "kind": "SERVER",
-            "timestamp": (root.startTime.getTime()*1000).toFixed(),
-            "duration": (root.duration*1000).toFixed(),
-            "debug": true,
-            "shared": true,
-            "localEndpoint": {
-                "serviceName": this._serviceName
-            }
-        }
-        spans.push(spanRoot);
-
-        for (let span of root.spans) {
-            let spanObj = {
-                "traceId": root.traceId,
-                "parentId": root.id,
-                "name": span.name,
-                "id": span.id,
-                "kind": "SERVER",
-                "timestamp": (span.startTime.getTime()*1000).toFixed(),
-                "duration": (span.duration*1000).toFixed(),
-                "debug": true,
-                "shared": true,
-                "localEndpoint": {
-                    "serviceName": this._serviceName
-                }
-            }
-            spans.push(spanObj);
-        }
-
+    /**
+     * @description send a trace to zipkin service
+     * @param zipkinTrace trace translated to zipkin
+     */
+    private publish(zipkinTrace) {
+        // request options
         const options = {
-            hostname: this._zipkinUrl.hostname,
-            port: this._zipkinUrl.port,
-            path: this._zipkinUrl.path,
+            hostname: this.zipkinUrl.hostname,
+            port: this.zipkinUrl.port,
+            path: this.zipkinUrl.path,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             }
         };
-        
-        debug('Zipkins exporter options: %o', { hostname: options.hostname,  port: options.port, path: options.path});
 
-
+        // build the request to zipkin service
         const req = http.request(options, (res) => {
             debug(`STATUS: ${res.statusCode}`);
             debug(`HEADERS: ${JSON.stringify(res.headers)}`);
@@ -88,7 +57,7 @@ export class Zipkin implements Exporter {
                 debug(`BODY: ${chunk}`);
             });
             res.on('end', () => {
-                debug('No more data in response.');
+                debug('Finished request.');
             });
         });
 
@@ -97,18 +66,71 @@ export class Zipkin implements Exporter {
         });
 
         // write data to request body
-        let spansJson: string[] = spans.map((span)=> JSON.stringify(span));
+        let spansJson: string[] = zipkinTrace.map((span) => JSON.stringify(span));
         spansJson.join("");
-        let outputJson:string = `[${spansJson}]`
-     //   debug('Zipkins span list Json: %s', outputJson);
+        let outputJson: string = `[${spansJson}]`
+        debug('Zipkins span list Json: %s', outputJson);
+
+        //sendind the request
         req.write(outputJson);
         req.end();
     }
 
-    emit(rootSpans: RootSpan[]) {}
+    /**
+     * @description translate OpenSensus RootSpan to Zipkin Trace format
+     * @param root
+     */
+    private translateTrace(root: RootSpan) {
+        let spanList = []
 
-    public onEndSpan(rootSpan: RootSpan) {
-        this.writeTrace(rootSpan);
+        // Builds root span data
+        const spanRoot = this.translateSpan(root)
+        spanList.push(spanRoot);
+
+        // Builds span data
+        root.spans.forEach(span => {
+            spanList.push(this.translateSpan(span));
+        });
+
+        return spanList;
     }
 
+    /**
+     * @description translate OpenSensus Span to Zipkin Span format
+     * @param span
+     * @param rootSpan optional
+     */
+    private translateSpan(span: Span | RootSpan, rootSpan?: RootSpan) {
+        let spanTraslated = {};
+
+        spanTraslated = {
+            "traceId": span.traceId,
+            "name": span.name,
+            "id": span.id,
+            "kind": "SERVER",
+            "timestamp": (span.startTime.getTime() * 1000).toFixed(),
+            "duration": (span.duration * 1000).toFixed(),
+            "debug": true,
+            "shared": true,
+            "localEndpoint": {
+                "serviceName": this.serviceName
+            }
+        }
+
+        if (rootSpan) {
+            spanTraslated["parentId"] = rootSpan.id;
+        }
+
+        return spanTraslated;
+    }
+
+    /**
+     * @description send the rootSpans to zipkin service
+     * @param rootSpans
+     */
+    emit(rootSpans: RootSpan[]) {
+        rootSpans.forEach(trace => {
+            this.publish(this.translateTrace(trace));
+        })
+    }
 }
