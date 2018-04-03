@@ -24,7 +24,8 @@ import { StackdriverOptions } from '../exporters/stackdriver/options'
 import { Zipkin } from '../exporters/zipkin/zipkin'
 import { ZipkinOptions } from '../exporters/zipkin/options'
 import { Tracer } from './model/tracer'
-import { ExporterOptions } from '../exporters/exporterOptions';
+import { Sampler } from './config/sampler'
+import { ExporterOptions } from '../exporters/exporterOptions'
 import { Exporter, NoopExporter, ConsoleLogExporter } from '../exporters/exporter'
 
 export type Func<T> = (...args: any[]) => T;
@@ -46,6 +47,7 @@ export class Tracing {
 
     private _active: Boolean;
     private _tracer: Tracer;
+    private _sampler: Sampler;
     private _exporter: Exporter;
     private pluginLoader: PluginLoader;
 
@@ -53,6 +55,7 @@ export class Tracing {
 
     constructor() {
         this._tracer = new Tracer();
+        this._sampler = new Sampler();
         this.pluginLoader = new PluginLoader(this._tracer);
         //if(debug)
         this._tracer.registerEndSpanListener(new ConsoleLogExporter());
@@ -72,6 +75,10 @@ export class Tracing {
     
     public get Tracer() : Tracer {
         return this._tracer;
+    }
+
+    public get Sampler() : Sampler {
+        return this._sampler;
     }
 
     public get Exporter(): Exporter {
