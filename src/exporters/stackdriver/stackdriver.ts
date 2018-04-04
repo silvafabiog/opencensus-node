@@ -22,20 +22,26 @@ import { Exporter } from '../exporter'
 import { google } from 'googleapis'
 import { JWT } from 'google-auth-library'
 import { RootSpan } from '../../trace/model/rootspan'
+import { Buffer } from '../buffer'
 
 const cloudTrace = google.cloudtrace('v1');
 
 export class Stackdriver implements Exporter {
     projectId: string;
-    buffer: object;
 
     constructor(options: StackdriverOptions) {
         this.projectId = options.projectId;
-        this.buffer = {};
     }
 
-    // TODO: Rename to "writeTrace"
-    public writeTrace(root: RootSpan) {
+    public publish(rootSpans: RootSpan[]) {
+        let stackdriverTraces = [];
+        rootSpans.forEach(trace => {
+            stackdriverTraces.push(this.translateTrace(trace));
+        })
+        this.authorize(this.sendTrace, stackdriverTraces);
+    }
+
+    private translateTrace(root: RootSpan) {
         // Builds span data
         let spanList = []
         root.spans.forEach(span => {
@@ -45,18 +51,11 @@ export class Stackdriver implements Exporter {
         // Builds root span data
         spanList.push(this.translateSpan(root));
 
-        // Builds trace data
-        let resource = {
-            "traces": [
-                {
-                    "projectId": this.projectId,
-                    "traceId": root.traceId,
-                    "spans": spanList
-                }
-            ]
+        return {
+            "projectId": this.projectId,
+            "traceId": root.traceId,
+            "spans": spanList
         }
-        //this.buffer[trace.traceId] = resource
-        this.authorize(this.sendTrace, resource);
     }
 
     private translateSpan(span) {
@@ -69,11 +68,12 @@ export class Stackdriver implements Exporter {
         }
     }
 
-    // TODO: Rename to "flushBuffer" and "publish"
-    private sendTrace(projectId, authClient, resource) {
+    private sendTrace(projectId, authClient, stackdriverTraces) {
         let request = {
             projectId: projectId,
-            resource: resource,
+            resource: {
+                traces: stackdriverTraces
+            },
             auth: authClient
         }
         cloudTrace.projects.patchTraces(request, function (err) {
@@ -86,7 +86,7 @@ export class Stackdriver implements Exporter {
         })
     }
 
-    private authorize(callback, resource) {
+    private authorize(callback, stackdriverTraces) {
         google.auth.getApplicationDefault(function (err, authClient: JWT, projectId) {
             if (err) {
                 console.error('authentication failed: ', err);
@@ -96,11 +96,7 @@ export class Stackdriver implements Exporter {
                 var scopes = ['https://www.googleapis.com/auth/cloud-platform'];
                 authClient = authClient.createScoped(scopes);
             }
-            callback(projectId, authClient, resource);
+            callback(projectId, authClient, stackdriverTraces);
         });
-    }
-
-    public onEndSpan(rootSpan: RootSpan) {
-        this.writeTrace(rootSpan);
     }
 }
