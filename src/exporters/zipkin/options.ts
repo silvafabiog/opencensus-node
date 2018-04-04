@@ -21,8 +21,8 @@ export class ZipkinOptions implements ExporterOptions {
     url: string;
     serviceName: string;
 
-    constructor(url: string, serviceName: string) {
-        this.url = url;
+    constructor(zipkinUrl: string, serviceName: string) {
+        this.url = zipkinUrl;
         this.serviceName = serviceName;
     }
 }
