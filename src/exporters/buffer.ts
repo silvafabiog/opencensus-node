@@ -99,7 +99,7 @@ export class Buffer implements OnEndSpanEventListener {
  
     private flush() { 
         this.exporters.forEach(exporter => { 
-            exporter.emit(this.queue) 
+            exporter.publish(this.queue) 
         }) 
         this.queue = []; 
         return this; 

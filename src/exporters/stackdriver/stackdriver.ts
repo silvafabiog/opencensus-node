@@ -33,12 +33,12 @@ export class Stackdriver implements Exporter {
         this.projectId = options.projectId;
     }
 
-    public emit(rootSpans: RootSpan[]) {
+    public publish(rootSpans: RootSpan[]) {
         let stackdriverTraces = [];
         rootSpans.forEach(trace => {
             stackdriverTraces.push(this.translateTrace(trace));
         })
-        this.authorize(this.publish, stackdriverTraces);
+        this.authorize(this.sendTrace, stackdriverTraces);
     }
 
     private translateTrace(root: RootSpan) {
@@ -68,7 +68,7 @@ export class Stackdriver implements Exporter {
         }
     }
 
-    private publish(projectId, authClient, stackdriverTraces) {
+    private sendTrace(projectId, authClient, stackdriverTraces) {
         let request = {
             projectId: projectId,
             resource: {

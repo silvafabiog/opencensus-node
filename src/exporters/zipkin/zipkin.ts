@@ -36,7 +36,7 @@ export class Zipkin implements Exporter {
      * @description send a trace to zipkin service
      * @param zipkinTrace trace translated to zipkin
      */
-    private publish(zipkinTrace) {
+    private sendTrace(zipkinTrace) {
         // request options
         const options = {
             hostname: this.zipkinUrl.hostname,
@@ -128,9 +128,9 @@ export class Zipkin implements Exporter {
      * @description send the rootSpans to zipkin service
      * @param rootSpans
      */
-    emit(rootSpans: RootSpan[]) {
+    publish(rootSpans: RootSpan[]) {
         rootSpans.forEach(trace => {
-            this.publish(this.translateTrace(trace));
+            this.sendTrace(this.translateTrace(trace));
         })
     }
 }
