@@ -23,6 +23,7 @@ import { Tracer } from '../model/tracer'
 import { debug } from '../../internal/util'
 import { Plugin, BasePlugin } from './plugingtypes'
 import { TraceOptions, TraceContext } from '../types/tracetypes';
+import { B3Format } from './propagation/b3Format'
 
 
 export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
@@ -58,7 +59,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                     let options = <TraceOptions>{
                         name: orig.name + ' ' + arguments[0].pathname,
                         type: orig.name,
-                        traceContext: self.getContextFromHeaders(arguments[1].headers)
+                        traceContext: B3Format.extractFromHeader(arguments[1].headers)
                             || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getContext()
                     }
 
@@ -118,7 +119,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
                 let name = orig.name + ' ' + arguments[0].pathname;
                 let type = orig.name;
-                let parentId = self.tracer.currentRootSpan.id || '';
+                let parentId = self.tracer.currentRootSpan && self.tracer.currentRootSpan.id || '';
 
                 // TODO Review this logic
                 if (!self.tracer.currentRootSpan) {
@@ -126,8 +127,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                     let options = {
                         name: name,
                         type: type,
-                        traceContext: self.getContextFromHeaders(arguments[0].headers)
-                            || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getContext()
+                        traceContext: B3Format.extractFromHeader(arguments[0].headers)
                     }
                     return self.tracer.startRootSpan(options, applySpan(arguments, orig));
                 } else {
@@ -138,21 +138,11 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                 function applySpan(args, orig) {
                     return function (span) {
 
-                        if (!span) {
+                        if (!span) {            // TODO Means span was not sampled
                             return orig.apply(this, args);
                         }
 
-                        // TODO Create a propagation class
-                        let b3Header = {
-                            'X-B3-TraceId': span.traceId,
-                            'X-B3-ParentSpanId': span.getParentSpanId(),
-                            'X-B3-SpanId': span.id,
-                            'X-B3-Sampled': true        // We only propagate sampled traces
-                        }
-                        debug('HTTP | patch outgoing request', orig.name);
-
-                        // TODO Call propagation.injectToHeader method passing the headers as argument
-                        args[0].headers = Object.assign(args[0].headers || {}, b3Header);
+                        args[0].headers = B3Format.injectToHeader(args[0].headers, span)
                         debug('REQUEST ARGUMENTS | patch outgoing request', args);
 
                         let req = orig.apply(this, args);
@@ -225,18 +215,6 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                 return result
             }
         }
-    }
-
-    getContextFromHeaders(headers): TraceContext {
-        if (headers) {
-            return <TraceContext>{
-                traceId: headers['X-B3-TraceId'],
-                spanId: headers['X-B3-SpanId'],
-                parentSpanId: headers['X-B3-ParentSpanId'],
-                sampled: headers['X-B3-Sampled']
-            }
-        }
-        return null;
     }
 
 }

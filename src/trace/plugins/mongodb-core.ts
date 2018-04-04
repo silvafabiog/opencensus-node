@@ -142,12 +142,10 @@ class MongoDBPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
           }
         }
 
-        debug('CURRENT ROOT SPAN ON MONGODB 1', self.tracer.currentRootSpan)
         return orig.apply(this, arguments)
 
         function wrappedCallback() {
           debug('intercepted mongodb-core.Cursor.prototype.%s callback %o', name, { id: id })
-          debug('CURRENT ROOT SPAN ON MONGODB 2', self.tracer.currentRootSpan)
           span.end()
           return cb.apply(this, arguments)
         }
