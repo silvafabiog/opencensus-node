@@ -2,4 +2,6 @@
 
 import { Tracing } from './trace/tracing';
 
-module.exports = new Tracing()
+let tracing = Tracing.instance
+
+export = tracing

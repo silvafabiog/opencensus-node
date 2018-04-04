@@ -53,9 +53,16 @@ export class Tracing {
 
     readonly PLUGINS = ['http', 'https', 'mongodb-core']
 
+    private static sgltn_instance: Tracing;
+
     constructor() {
         this.tracer = new Tracer();
         this.pluginLoader = new PluginLoader(this.tracer);
+    }
+
+
+    public static get instance() {
+        return this.sgltn_instance || (this.sgltn_instance = new this());
     }
 
     /**
