@@ -25,7 +25,8 @@ import { Zipkin } from '../exporters/zipkin/zipkin'
 import { ZipkinOptions } from '../exporters/zipkin/options'
 import { Buffer } from '../exporters/buffer'
 import { Tracer } from './model/tracer'
-import { ExporterOptions } from '../exporters/exporterOptions';
+import { Sampler } from './config/sampler'
+import { ExporterOptions } from '../exporters/exporterOptions'
 import { Exporter, NoopExporter, ConsoleLogExporter } from '../exporters/exporter'
 
 export type Func<T> = (...args: any[]) => T;
@@ -45,6 +46,7 @@ export const defaultConfig: TracerConfig = {
 
 export class Tracing {
 
+    private sampler: Sampler;
     private active_: Boolean;
     private tracer: Tracer;
     private exporter: Exporter;
@@ -56,6 +58,8 @@ export class Tracing {
     constructor() {
         this.tracer = new Tracer();
         this.pluginLoader = new PluginLoader(this.tracer);
+        this.sampler = new Sampler();
+
     }
 
     /**
@@ -80,6 +84,10 @@ export class Tracing {
 
     get Tracer(): Tracer {
         return this.tracer;
+    }
+
+    get Sampler() : Sampler {
+        return this.sampler;
     }
 
     get Exporter(): Exporter {
