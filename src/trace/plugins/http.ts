@@ -53,20 +53,23 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
             return function (event, req, res) {
                 debug('intercepted request event %s', event)
                 if (event === 'request') {
-                    debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)                  
+                    debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
 
                     let options = <TraceOptions>{
                         name: arguments[1].method + ' ' + arguments[1].url,
                         type: arguments[1].method,
                         traceContext: B3Format.extractFromHeader(arguments[1].headers)
-                            || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getContext()
+                    }
+
+                    // Make sure we do not create a trace that was not sampled
+                    if (options.traceContext && !options.traceContext.sampleDecision) {
+                        return orig.apply(this, arguments)
                     }
 
                     return self.tracer.startRootSpan(options, (root) => {
                         let method = req.method || 'GET';
 
                         if (!root) {
-                            //B3Format.emptyContext(arguments[1].headers)
                             return orig.apply(this, arguments)
                         }
 
@@ -76,21 +79,10 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                         self.tracer.wrapEmitter(req);
                         self.tracer.wrapEmitter(res);
 
-                        //debug('created trace %o', {id: trace.traceId, name: trace.name, startTime: trace.startTime})
-
                         eos(res, function (err) {
-                            if (!err) return root.end()
-
-                            //TODO improve erro handleing
-                            /*if (!root.ended) {
-                              var duration = Date.now() - root.clock.start
-                              if (duration > tracer.abortedErrorThreshold) {
-                                tracer.captureError('Socket closed with active HTTP request (>' + (tracer.abortedErrorThreshold / 1000) + ' sec)', {
-                                  request: req,
-                                  extra: { abortTime: duration }
-                                })
-                                return orig.apply(this, arguments)
-                            })*/
+                            if (!err) {
+                                return root.end()
+                            }
                         })
                         return orig.apply(this, arguments)
                     })
@@ -119,7 +111,6 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                 let type = orig.name;
                 let parentId = self.tracer.currentRootSpan && self.tracer.currentRootSpan.id || '';
 
-                // TODO Review this logic
                 if (!self.tracer.currentRootSpan) {
                     let options = {
                         name: name,
@@ -135,22 +126,20 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                 function applySpan(args, orig) {
                     return function (span) {
 
-                        if (!span) {            // TODO Means span was not sampled
-                            return orig.apply(this, args);
-                        }
-
                         args[0].headers = B3Format.injectToHeader(args[0].headers, span)
-                        debug('REQUEST ARGUMENTS | patch outgoing request', args);
-
                         let req = orig.apply(this, args);
+
+                        if (!span) {            // TODO Means span was not sampled
+                            return req
+                        }
 
                         let id = span.id && span.traceId;
                         debug('\n\nintercepted call to %s.request/get %o', self.moduleName, { id: id })
 
-                        req.on('response', onresponse)
+                        req.on('response', onResponse)
                         return req
 
-                        function onresponse(res) {
+                        function onResponse(res) {
                             debug('intercepted http.ClientRequest response event %o', { id: id })
 
                             // Inspired by:
