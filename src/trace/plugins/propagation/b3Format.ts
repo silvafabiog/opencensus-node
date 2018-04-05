@@ -40,6 +40,7 @@ export class B3Format {
     }
 
     static injectToHeader(headers: object, span: SpanBaseModel): object {
+        //sampler = new Sampler();
         
         // TODO: get sampling decision
         let b3Header = {
@@ -47,6 +48,7 @@ export class B3Format {
             'X-B3-ParentSpanId': span.getParentSpanId(),
             'X-B3-SpanId': span.id,
             'X-B3-Sampled': true
+            //'X-B3-Sampled': sampler.shouldSample(span.traceId)
         }
 
         return Object.assign(headers || {}, b3Header);

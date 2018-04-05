@@ -53,22 +53,20 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
             return function (event, req, res) {
                 debug('intercepted request event %s', event)
                 if (event === 'request') {
-                    debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)
-                    debug('REQUEST | patch emit request', arguments[1].headers)
+                    debug('intercepted request event call to %s.Server.prototype.emit', self.moduleName)                  
 
                     let options = <TraceOptions>{
-                        name: orig.name + ' ' + arguments[0].pathname,
-                        type: orig.name,
+                        name: arguments[1].method + ' ' + arguments[1].url,
+                        type: arguments[1].method,
                         traceContext: B3Format.extractFromHeader(arguments[1].headers)
                             || self.tracer.currentRootSpan && self.tracer.currentRootSpan.getContext()
                     }
 
                     return self.tracer.startRootSpan(options, (root) => {
                         let method = req.method || 'GET';
-                        root.name = method + ' ' + (req.url ? (url.parse(req.url).pathname || '/') : '/');
-                        root.type = 'request'
 
                         if (!root) {
+                            //B3Format.emptyContext(arguments[1].headers)
                             return orig.apply(this, arguments)
                         }
 
@@ -123,7 +121,6 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
                 // TODO Review this logic
                 if (!self.tracer.currentRootSpan) {
-                    // TODO Put extractFromHeaders method inside a propagation class
                     let options = {
                         name: name,
                         type: type,
