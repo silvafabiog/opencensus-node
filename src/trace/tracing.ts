@@ -23,17 +23,18 @@ import { Stackdriver } from '../exporters/stackdriver/stackdriver'
 import { StackdriverOptions } from '../exporters/stackdriver/options'
 import { Zipkin } from '../exporters/zipkin/zipkin'
 import { ZipkinOptions } from '../exporters/zipkin/options'
+import { Buffer } from '../exporters/buffer'
 import { Tracer } from './model/tracer'
-import { ExporterOptions } from '../exporters/exporterOptions';
+import { Sampler } from './config/sampler'
+import { ExporterOptions } from '../exporters/exporterOptions'
 import { Exporter, NoopExporter, ConsoleLogExporter } from '../exporters/exporter'
-import { Buffer } from '../exporters/buffer';
 
 export type Func<T> = (...args: any[]) => T;
 
 export interface TracerConfig {
     exporter?: Exporter,
     sampleRate?: number;
-    ignoreUrls?:  Array<string|RegExp>;
+    ignoreUrls?: Array<string | RegExp>;
 }
 
 export const defaultConfig: TracerConfig = {
@@ -45,57 +46,87 @@ export const defaultConfig: TracerConfig = {
 
 export class Tracing {
 
-    private _active: Boolean;
-    private _tracer: Tracer;
-    private _exporter: Exporter;
+    private sampler: Sampler;
+    private active_: Boolean;
+    private tracer: Tracer;
+    private exporter: Exporter;
+    private buffer: Buffer;
     private pluginLoader: PluginLoader;
 
     readonly PLUGINS = ['http', 'https', 'mongodb-core']
 
+    private static sgltn_instance: Tracing;
+
     constructor() {
-        this._tracer = new Tracer();
-        this.pluginLoader = new PluginLoader(this._tracer);
+        this.tracer = new Tracer();
+        this.pluginLoader = new PluginLoader(this.tracer);
+        this.sampler = new Sampler();
+
     }
 
-    public start(): Tracing {
-        if (this._tracer.getEventListeners.length > 0) { 
-            this._exporter = new ConsoleLogExporter(); 
-            let buffer = new Buffer().registerExporter(this._exporter); 
-            this._tracer.registerEndSpanListener(buffer); 
-        } 
+
+    public static get instance() {
+        return this.sgltn_instance || (this.sgltn_instance = new this());
+    }
+
+    /**
+     * @description
+     */
+    start(): Tracing {
+        if (this.tracer.getEventListeners.length > 0) {
+            this.exporter = new ConsoleLogExporter();
+            const buffer = new Buffer().registerExporter(this.exporter);
+            this.tracer.registerEndSpanListener(buffer);
+        }
         this.pluginLoader.loadPlugins(this.PLUGINS);
-        this._active = true;
-        this._tracer.start();
+        this.active_ = true;
+        this.tracer.start();
         return this;
     }
 
-    public stop() {
-        this._active = false;
-        this._tracer.stop();
-    }
-    
-    public get Tracer() : Tracer {
-        return this._tracer;
+    stop() {
+        this.active_ = false;
+        this.tracer.stop();
     }
 
-    public get Exporter(): Exporter {
-        return this._exporter;
+    get Tracer(): Tracer {
+        return this.tracer;
     }
 
-    public addStackdriver(projectId: string, bufferSize?: number): Tracing {
-        let stackdriverOptions = new StackdriverOptions(projectId);
-        let exporter = new Stackdriver(stackdriverOptions); 
- 
-        let buffer = new Buffer(bufferSize).registerExporter(exporter); 
-        this._tracer.registerEndSpanListener(buffer); 
-        return this; 
+    get Sampler() : Sampler {
+        return this.sampler;
     }
 
-    /*public addZipkin(url: string, serviceName: string, bufferSize?: number): Tracing {
-        let zipkinOptions = new ZipkinOptions(url, serviceName);
-        this._exporter = new Zipkin(zipkinOptions);
-        this._tracer.registerEndSpanListener(this._exporter);
+    get Exporter(): Exporter {
+        return this.exporter;
+    }
+
+    /**
+     * @description
+     * @param projectId
+     * @param bufferSize
+     */
+    addStackdriver(projectId: string, bufferSize?: number): Tracing {
+        const stackdriverOptions = new StackdriverOptions(projectId);
+        const exporter = new Stackdriver(stackdriverOptions);
+
+        const buffer = new Buffer(bufferSize).registerExporter(exporter);
+        this.tracer.registerEndSpanListener(buffer);
         return this;
-    }*/
+    }
+
+    /**
+     * @description register zipkin driver
+     * @param zipkinUrl url from zipkin service, including the port and path. E.g.: http://localhost:9411/api/v2/spans
+     * @param serviceName name of the service that will appear in the zipkin service
+     */
+    addZipkin(zipkinUrl: string, serviceName: string): Tracing {
+        const zipkinOptions = new ZipkinOptions(zipkinUrl, serviceName);
+        const exporter = new Zipkin(zipkinOptions);
+
+        const buffer = new Buffer().registerExporter(exporter);
+        this.tracer.registerEndSpanListener(buffer);
+        return this;
+    }
 }
 
