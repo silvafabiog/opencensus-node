@@ -40,7 +40,7 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
         shimmer.wrap(http && http.Server && http.Server.prototype, 'emit', this.patchHttpRequest(this))
 
         debug('patching http.request function')
-        shimmer.massWrap([http], ['request', 'get'], this.patchOutgoingRequest(this))
+        shimmer.wrap(http, 'request', this.patchOutgoingRequest(this))
 
         debug('patching http.ServerResponse.prototype.writeHead function')
         shimmer.wrap(http && http.ServerResponse && http.ServerResponse.prototype, 'writeHead', this.patchWriteHead(this))
@@ -93,83 +93,55 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
         }
     }
 
-    patchOutgoingRequest(self: HttpPlugin) {
+    patchOutgoingRequest (self: HttpPlugin) {
+        var spanType = 'ext.' + self.moduleName + '.http'
+  
         return function (orig) {
-            return function () {
-
-                // Parses string url into url object
-                if (arguments[0] instanceof String) {
-                    arguments[0] = url.parse(arguments[0]);
-                }
-
-                // Do not track ourselves
-                if (arguments[0].hostname && arguments[0].hostname.indexOf('googleapis') > 0) {
-                    return orig.apply(this, arguments);
-                }
-
-                let name = orig.name + ' ' + arguments[0].pathname;
-                let type = orig.name;
-                let parentId = self.tracer.currentRootSpan && self.tracer.currentRootSpan.id || '';
-
-                if (!self.tracer.currentRootSpan) {
-                    let options = {
-                        name: name,
-                        type: type,
-                        traceContext: B3Format.extractFromHeader(arguments[0].headers)
-                    }
-                    return self.tracer.startRootSpan(options, applySpan(arguments, orig));
-                } else {
-                    let span = self.tracer.startSpan(name, type, parentId);
-                    return (span) => applySpan(arguments, orig);
-                }
-
-                function applySpan(args, orig) {
-                    return function (span) {
-
-                        args[0].headers = B3Format.injectToHeader(args[0].headers, span)
-                        let req = orig.apply(this, args);
-
-                        if (!span) {            // TODO Means span was not sampled
-                            return req
-                        }
-
-                        let id = span.id && span.traceId;
-                        debug('\n\nintercepted call to %s.request/get %o', self.moduleName, { id: id })
-
-                        req.on('response', onResponse)
-                        return req
-
-                        function onResponse(res) {
-                            debug('intercepted http.ClientRequest response event %o', { id: id })
-
-                            // Inspired by:
-                            // https://github.com/nodejs/node/blob/9623ce572a02632b7596452e079bba066db3a429/lib/events.js#L258-L274
-                            if (res.prependListener) {
-                                // Added in Node.js 6.0.0
-                                res.prependListener('end', onEnd)
-                            } else {
-                                var existing = res._events && res._events.end
-                                if (!existing) {
-                                    res.on('end', onEnd)
-                                } else {
-                                    if (typeof existing === 'function') {
-                                        res._events.end = [onEnd, existing]
-                                    } else {
-                                        existing.unshift(onEnd)
-                                    }
-                                }
-                            }
-
-                            function onEnd() {
-                                debug('intercepted http.IncomingMessage end event %o', { id: id })
-                                span.end()
-                            }
-                        }
-                    }
-                }
+          return function () {
+          
+            var req = orig.apply(this, arguments)
+            var name = req.method + ' ' + req._headers.host + url.parse(req.path).pathname
+  
+            //TODO only for tests. Remove and implement a blacklist
+            if (name.indexOf('googleapi') < 0) {
+              var span = self.tracer.startSpan(name, spanType)
+              var id = span.id && span.traceId
             }
+  
+            if (!span) return req
+            req.on('response', onresponse)
+  
+            return req
+  
+            function onresponse (res) {
+ 
+              // Inspired by:
+              // https://github.com/nodejs/node/blob/9623ce572a02632b7596452e079bba066db3a429/lib/events.js#L258-L274
+              if (res.prependListener) {
+                // Added in Node.js 6.0.0
+                res.prependListener('end', onEnd)
+              } else {
+                var existing = res._events && res._events.end
+                if (!existing) {
+                  res.on('end', onEnd)
+                } else {
+                  if (typeof existing === 'function') {
+                    res._events.end = [onEnd, existing]
+                  } else {
+                    existing.unshift(onEnd)
+                  }
+                }
+              }
+  
+              function onEnd () {
+                //debug('intercepted http.IncomingMessage end event %o', {id: id})
+                span.end()
+              }
+            }
+          }
         }
-    }
+      }
+  
 
     patchWriteHead(self: HttpPlugin) {
         return function (orig) {

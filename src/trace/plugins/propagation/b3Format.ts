@@ -32,7 +32,7 @@ export class B3Format {
     constructor() { }
 
     static extractFromHeader(headers: object): TraceContext {
-        if (headers) {
+        if (headers && (headers[X_B3_TRACE_ID] || headers[X_B3_SAMPLED])) {
             let traceContext = <TraceContext>{
                 traceId: headers[X_B3_TRACE_ID],
                 spanId: headers[X_B3_SPAN_ID],
