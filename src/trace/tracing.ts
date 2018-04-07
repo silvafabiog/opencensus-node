@@ -31,16 +31,6 @@ import { Exporter, NoopExporter, ConsoleLogExporter } from '../exporters/exporte
 
 export type Func<T> = (...args: any[]) => T;
 
-export interface TracerConfig {
-    exporter?: Exporter,
-    sampleRate?: number;
-    ignoreUrls?: Array<string | RegExp>;
-}
-
-export const defaultConfig: TracerConfig = {
-    exporter: new NoopExporter(),
-    sampleRate: 1.0
-}
 
 //TODO: Add comments 
 
