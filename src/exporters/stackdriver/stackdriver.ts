@@ -14,89 +14,112 @@
  * limitations under the License.
  */
 
-import * as uuidv4 from 'uuid/v4';
+import {JWT} from 'google-auth-library';
+import {google} from 'googleapis';
 
-import { debug } from '../../internal/util'
-import { StackdriverOptions } from './options'
-import { Exporter } from '../exporter'
-import { google } from 'googleapis'
-import { JWT } from 'google-auth-library'
-import { RootSpan } from '../../trace/model/rootspan'
-import { Buffer } from '../buffer'
+import {debug} from '../../internal/util';
+import {RootSpan} from '../../trace/model/rootspan';
+import {Buffer} from '../buffer';
+import {Exporter} from '../exporter';
+import {StackdriverOptions} from './options';
 
 const cloudTrace = google.cloudtrace('v1');
 
+interface SpanData {
+  name: string;
+  kind: string;
+  spanId: string;
+  startTime: string;
+  endTime: string;
+}
+
+/** Format and sends span information to Stackdriver */
 export class Stackdriver implements Exporter {
-    projectId: string;
+  projectId: string;
 
-    constructor(options: StackdriverOptions) {
-        this.projectId = options.projectId;
-    }
+  constructor(options: StackdriverOptions) {
+    this.projectId = options.projectId;
+  }
 
-    public publish(rootSpans: RootSpan[]) {
-        let stackdriverTraces = [];
-        rootSpans.forEach(trace => {
-            stackdriverTraces.push(this.translateTrace(trace));
-        })
-        this.authorize(this.sendTrace, stackdriverTraces);
-    }
+  /**
+   * Publishes a list of root spans to Stackdriver.
+   * @param rootSpans
+   */
+  publish(rootSpans: RootSpan[]) {
+    const STACK_DRIVER_TRACES =
+        rootSpans.map(trace => this.translateTrace(trace));
+    this.authorize(this.sendTrace, STACK_DRIVER_TRACES);
+  }
 
-    private translateTrace(root: RootSpan) {
-        // Builds span data
-        let spanList = []
-        root.spans.forEach(span => {
-            spanList.push(this.translateSpan(span));
-        });
+  /**
+   * Translates root span data to Stackdriver's trace format.
+   * @param root
+   */
+  private translateTrace(root: RootSpan) {
+    const spanList = root.spans.map(span => this.translateSpan(span));
+    spanList.push(this.translateSpan(root));
 
-        // Builds root span data
-        spanList.push(this.translateSpan(root));
+    return {
+      'projectId': this.projectId,
+      'traceId': root.traceId,
+      'spans': spanList
+    };
+  }
 
-        return {
-            "projectId": this.projectId,
-            "traceId": root.traceId,
-            "spans": spanList
-        }
-    }
+  /**
+   * Translates span data to Stackdriver's span format.
+   * @param span
+   */
+  private translateSpan(span): SpanData {
+    return {
+      'name': span.name,
+      'kind': 'SPAN_KIND_UNSPECIFIED',
+      'spanId': span.id,
+      'startTime': span.startTime,
+      'endTime': span.endTime
+    } as SpanData;
+  }
 
-    private translateSpan(span) {
-        return {
-            "name": span.name,
-            "kind": "SPAN_KIND_UNSPECIFIED",
-            "spanId": span.id,
-            "startTime": span.startTime,
-            "endTime": span.endTime
-        }
-    }
+  /**
+   * Sends traces in the Stackdriver format to the service.
+   * @param projectId
+   * @param authClient
+   * @param stackdriverTraces
+   */
+  private sendTrace(projectId, authClient, stackdriverTraces) {
+    const request = {
+      projectId,
+      resource: {traces: stackdriverTraces},
+      auth: authClient
+    };
+    cloudTrace.projects.patchTraces(request, err => {
+      if (err) {
+        debug(err);
+        return;
+      } else {
+        debug('\nSENT TRACE:\n', request.resource);
+      }
+    });
+  }
 
-    private sendTrace(projectId, authClient, stackdriverTraces) {
-        let request = {
-            projectId: projectId,
-            resource: {
-                traces: stackdriverTraces
-            },
-            auth: authClient
-        }
-        cloudTrace.projects.patchTraces(request, function (err) {
-            if (err) {
-                debug(err);
-                return;
-            } else {
-                debug('\nSENT TRACE:\n', request.resource);
-            }
-        })
-    }
-
-    private authorize(callback, stackdriverTraces) {
-        google.auth.getApplicationDefault(function (err, authClient: JWT, projectId) {
-            if (err) {
-                console.error('authentication failed: ', err);
-                return;
-            }
-            if (authClient.createScopedRequired && authClient.createScopedRequired()) {
-                var scopes = ['https://www.googleapis.com/auth/cloud-platform'];
-                authClient = authClient.createScoped(scopes);
-            }
-            callback(projectId, authClient, stackdriverTraces);
-        });
-    }
+  /**
+   * Gets the Google Application Credentials from the environment variables,
+   * authenticates the client and calls a method to send the traces data.
+   * @param sendTrace
+   * @param stackdriverTraces
+   */
+  private authorize(sendTrace: Function, stackdriverTraces) {
+    google.auth.getApplicationDefault((err, authClient: JWT, projectId) => {
+      if (err) {
+        console.error('authentication failed: ', err);
+        return;
+      }
+      if (authClient.createScopedRequired &&
+          authClient.createScopedRequired()) {
+        const scopes = ['https://www.googleapis.com/auth/cloud-platform'];
+        authClient = authClient.createScoped(scopes);
+      }
+      sendTrace(projectId, authClient, stackdriverTraces);
+    });
+  }
 }
