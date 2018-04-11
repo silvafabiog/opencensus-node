@@ -14,14 +14,21 @@
  * limitations under the License.
  */
 
-import {ExporterOptions} from "../exporterOptions"
-
+import {ExporterOptions} from '../exporterOptions';
+/**
+ * This class represents the options from stackdriver
+ */
 export class StackdriverOptions implements ExporterOptions {
-    projectId: string;
-    bufferSize?: number;
+  projectId: string;
+  bufferSize?: number;
 
-    constructor(projectId: string, bufferSize?: number) {
-        this.projectId = projectId;
-        this.bufferSize = bufferSize;
-    }
+  /**
+   * Constructor of StackdriverOptions class.
+   * @param projectId project id defined to stackdriver
+   * @param bufferSize optional parameter, defines the buffer size
+   */
+  constructor(projectId: string, bufferSize?: number) {
+    this.projectId = projectId;
+    this.bufferSize = bufferSize;
+  }
 }
