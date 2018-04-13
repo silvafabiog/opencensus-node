@@ -15,7 +15,7 @@
  */
 
 import {debug} from '@opencensus/opencensus-core';
-import {SpanBaseModel, TraceContext} from '@opencensus/opencensus-core';
+import {Span, TraceContext} from '@opencensus/opencensus-core';
 
 const X_B3_TRACE_ID = 'x-b3-traceid';
 const X_B3_SPAN_ID = 'x-b3-spanid';
@@ -55,11 +55,11 @@ export class B3Format {
    * @param headers
    * @param span
    */
-  static injectToHeader(headers: object, span: SpanBaseModel): object {
+  static injectToHeader(headers: object, span: Span): object {
     const b3Header = {
       'x-b3-traceid': span && span.traceId || 'undefined',
       'x-b3-spanid': span && span.id || 'undefined',
-      'x-x3-parentspanid': span && span.getParentSpanId() || 'undefined',
+      'x-x3-parentspanid': span && span.parentSpanId || 'undefined',
     };
 
     if (span) b3Header['x-b3-sampled'] = SAMPLED_VALUE;
