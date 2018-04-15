@@ -21,9 +21,8 @@ import { Tracer } from '@opencensus/opencensus-core'
 import { debug } from '@opencensus/opencensus-core'
 import { Plugin, BasePlugin } from '@opencensus/opencensus-core'
 
-var shimmer = require('shimmer');
 
-class MongoDBPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
+class MongoDBPlugin extends BasePlugin implements Plugin {
 
   readonly SERVER_FNS = ['insert', 'update', 'remove', 'auth']
   readonly CURSOR_FNS_FIRST = ['_find', '_getmore']
@@ -33,28 +32,34 @@ class MongoDBPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
     super('mongodb-core');
   }
 
-  public applyPatch(mongodb: any, tracer: Tracer, version: string) {
-    this.setPluginContext(mongodb, tracer, version);
+  public applyPatch(exporter: any, tracer: Tracer, version: string) {
+    this.setPluginContext(exporter, tracer, version);
 
     if (!semver.satisfies(version, '>=1.2.19 <4.0.0')) {
       debug('mongodb-core version %s not supported - aborting...', version)
-      return mongodb
+      return exporter
     }
 
-    if (mongodb.Server) {
+    if (exporter.Server) {
       debug('patching mongodb-core.Server.prototype.command')
-      shimmer.wrap(mongodb.Server.prototype, 'command', this.patchCommand(this))
+      this.wrap(exporter.Server.prototype, 'command', this.patchCommand(this))
       debug('patching mongodb-core.Server.prototype functions:', this.SERVER_FNS)
-      shimmer.massWrap(mongodb.Server.prototype, this.SERVER_FNS, this.patchQuery(this))
+      this.massWrap(exporter.Server.prototype, this.SERVER_FNS, this.patchQuery(this))
     }
 
-    if (mongodb.Cursor) {
+    if (exporter.Cursor) {
       debug('patching mongodb-core.Cursor.prototype functions:', this.CURSOR_FNS_FIRST)
-      shimmer.massWrap(mongodb.Cursor.prototype, this.CURSOR_FNS_FIRST, this.patchCursor(this))
+      this.massWrap(exporter.Cursor.prototype, this.CURSOR_FNS_FIRST, this.patchCursor(this))
     }
 
-    return mongodb
+    return exporter
   }
+
+  applyUnpatch(): void {
+    this.unwrap(this.exporter.Server.prototype, 'command');
+    this.massUnwrap(this.exporter.Server.prototype, this.SERVER_FNS);
+    this.massUnwrap(this.exporter.Cursor.prototype, this.CURSOR_FNS_FIRST);
+ }
 
   patchCommand(self: MongoDBPlugin) {
     return function (orig) {
@@ -154,4 +159,6 @@ class MongoDBPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
   }
 }
 
-module.exports = new MongoDBPlugin()
+module.exports = new MongoDBPlugin();
+
+

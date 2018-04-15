@@ -39,7 +39,10 @@
     "mocha": "^5.0.4",
     "ncp": "^2.0.0",
     "ts-node": "^4.0.0",
-    "typescript": "^2.7.2"
+    "typescript": "^2.7.2",
+    "@opencensus/opencensus-instrumentation-http": "^0.0.1",
+    "@opencensus/opencensus-instrumentation-https": "^0.0.1",
+    "@opencensus/opencensus-instrumentation-mongodb-core": "^0.0.1"
   },
   "dependencies": {
     "@opencensus/opencensus-core": "^0.0.1",

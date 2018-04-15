@@ -16,44 +16,109 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
+import * as hook from 'require-in-the-middle';
 
-import {Tracer} from '@opencensus/opencensus-core'
-import {debug} from '@opencensus/opencensus-core'
+import {Tracer} from '@opencensus/opencensus-core';
+import {Plugin} from '@opencensus/opencensus-core';
+import {debug} from '@opencensus/opencensus-core';
+
+const CONTEXT: string ='@opencensus';
+const PLUGIN_PACKAGE_NAME_PREFIX : string ='opencensus-instrumentation';
 
 
+/**
+ *
+ */
 export class PluginLoader {
-    
-    //private modules: string[];
-    private _tracer: Tracer;
+
+    private tracer: Tracer;
+    private plugins: Plugin[] = [];
 
     constructor(tracer: Tracer) {
-        this._tracer = tracer;
+        this.tracer = tracer;
     }
 
-    public loadPlugins(plugins: string[]) {
-        //TODO - maybe review this solution
-        let hook = require('require-in-the-middle');
+    static getDefaultPackageName(moduleName):string  {
+        return `${CONTEXT}/${PLUGIN_PACKAGE_NAME_PREFIX}-${moduleName}`;
+    }
+
+    static getDefaultPackageMap(modulesToPatch: string[]): Map<string,string> {
+      let modulePkgPairList = modulesToPatch.map(
+        (item: string): [string,string] => { return [item, PluginLoader.getDefaultPackageName(item)]})
+      return new Map<string,string>(modulePkgPairList);
+    }
+
+    /**
+     * private getPlugingImportPath - description
+     *
+     * @param  {type} pkgname: string description
+     * @param  {type} name:string     description
+     * @return {type}                 description
+     */
+    private getPlugingImportPath(pkgname: string, name:string) {
+        return path.join(pkgname,'build','src',name);
+    }
+
+
+    /**
+     * private getPackageVersion - description
+     *
+     * @param  {type} name:string    description
+     * @param  {type} basedir:string description
+     * @return {type}                description
+     */
+    private getPackageVersion(name:string, basedir:string) {
+      let version = null;
+      if (basedir) {
+        let pkgJson = path.join(basedir, 'package.json')
+        try {
+          version = JSON.parse(fs.readFileSync(pkgJson).toString()).version
+        } catch (e) {
+          debug('could not get version of %s module: %s', name, e.message)
+        }
+      } else {
+        version = process.versions.node
+      }
+      return version;
+    }
+
+
+    /**
+     * loadPlugins - description
+     *
+     * @param  {type} pluginMap: Map<string description
+     * @param  {type} string>               description
+     * @return {type}                       description
+     */
+    loadPlugins(pluginMap: Map<string,string>) {
         let self = this;
-        
-        hook(plugins, function (exports, name, basedir) {
-            var pkg, version
-        
-            if (basedir) {
-              pkg = path.join(basedir, 'package.json')
-              try {
-                version = JSON.parse(fs.readFileSync(pkg).toString()).version
-              } catch (e) {
-                debug('could not shim %s module: %s', name, e.message)
-                return exports
-              }
+
+        hook(Array.from(pluginMap.keys()), (exports, name, basedir) => {
+            let version = self.getPackageVersion(name, basedir);
+            if(!version) {
+              return exports;
             } else {
-              version = process.versions.node
+              debug('applying patch to %s@%s module', name, version)
+              debug('using package %s to patch %s', pluginMap.get(name), name);
+              let pluginImportPath = self.getPlugingImportPath(pluginMap.get(name),name);
+              let plugin: Plugin = require(pluginImportPath);
+              self.plugins.push(plugin);
+              return plugin.applyPatch(exports, self.tracer, version);
             }
-        
-            debug('patching %s@%s module', name, version)
-            //TODO: maybe a more generic way to pass plugin path, ex.: pass by a parameter
-            return require('./' + name ).applyPatch(exports, self._tracer, version)
-          })
+        })
+    }
+
+
+    /**
+     * unloadPlugins - description
+     *
+     * @return {type}  description
+     */
+    unloadPlugins() {
+      this.plugins.forEach( (plugin: Plugin) => {
+         plugin.applyUnpatch();
+      });
+      this.plugins = [];
     }
 
 }

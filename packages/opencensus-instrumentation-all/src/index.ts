@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
-export * from '@opencensus/opencensus-instrumentation-http';
-export * from '@opencensus/opencensus-instrumentation-https';
-export * from '@opencensus/opencensus-instrumentation-mongodb-core';
+import * as http from '@opencensus/opencensus-instrumentation-http';
+import * as https from '@opencensus/opencensus-instrumentation-https';
+import * as mongodb_core from '@opencensus/opencensus-instrumentation-mongodb-core';
+
+export {
+  http, https, mongodb_core
+}

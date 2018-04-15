@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-import { Tracing } from './trace/tracing';
+import {TracingImpl} from './trace/tracing';
+import {Tracing} from '@opencensus/opencensus-core';
 
-let tracing = Tracing.instance
+let tracing: Tracing = TracingImpl.instance
 
 export = tracing

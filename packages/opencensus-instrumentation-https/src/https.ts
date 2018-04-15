@@ -16,28 +16,26 @@
 
 import * as semver from 'semver'
 import * as shimmer from 'shimmer'
-import * as url from 'url'
-import * as eos from 'end-of-stream'
 
 import {Tracer} from '@opencensus/opencensus-core'
 import {debug} from '@opencensus/opencensus-core'
 import {HttpPlugin} from '@opencensus/opencensus-instrumentation-http'
 
-class HttpsPlugin extends HttpPlugin {
+export class HttpsPlugin extends HttpPlugin {
 
   constructor() {
     super()
     this.moduleName = 'https'
   }
 
-  public applyPatch (https: any, tracer: Tracer, version: string) {
+  public applyPatch (exporters: any, tracer: Tracer, version: string) {
     
-        this.setPluginContext(https, tracer, version);
+        this.setPluginContext(exporters, tracer, version);
 
         debug('patching  https.Server.prototype.emit function')
-        shimmer.wrap(https && https.Server && https.Server.prototype, 'emit', this.patchHttpRequest(this))
+        shimmer.wrap(exporters && exporters.Server && exporters.Server.prototype, 'emit', this.patchHttpRequest(this))
 
-      // From Node.js v9.0.0 and onwards, https requests no longer just call the
+      // From Nocde.js v9.0.0 and onwards, https requests no longer just call the
       // http.request function. So to correctly instrument outgoing HTTPS requests
       // in all supported Node.js versions, we'll only only instrument the
       // https.request function if the Node version is v9.0.0 or above.
@@ -46,11 +44,11 @@ class HttpsPlugin extends HttpPlugin {
       // https://github.com/nodejs/node/commit/5118f3146643dc55e7e7bd3082d1de4d0e7d5426
       if (semver.gte(version, '9.0.0')) {
         debug('patching  https.request function')
-        shimmer.wrap(https, 'request',this.patchOutgoingRequest(this))
+        shimmer.wrap(exporters, 'request',this.patchOutgoingRequest(this))
       }
 
-      return https
+      return exporters
  }
 }
 
-module.exports = new HttpsPlugin()
+module.exports = new HttpsPlugin();

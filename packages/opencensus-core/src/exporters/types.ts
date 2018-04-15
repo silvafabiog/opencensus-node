@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-import {Tracer} from './model/types';
-import {Sampler} from './config/types';
-import {Exporter} from '../exporters/types';
 
+import {RootSpan} from '../trace/model/types';
 
-export interface  Tracing {
-  readonly tracer: Tracer;
-  readonly sampler: Sampler;
-  readonly exporter: Exporter;
-  start(): Tracing;
-  stop(): void;
+export interface Exporter { publish(rootSpans: RootSpan[]); }
+
+/**
+ * TODO: Interface to exporters options
+ */
+export interface ExporterOptions {
+    
 }

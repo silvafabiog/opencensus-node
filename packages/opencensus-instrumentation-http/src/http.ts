@@ -15,7 +15,6 @@
  */
 
 import * as semver from 'semver'
-import * as shimmer from 'shimmer'
 import * as url from 'url'
 import * as eos from 'end-of-stream'
 
@@ -25,27 +24,32 @@ import { Plugin, BasePlugin } from '@opencensus/opencensus-core'
 import { TraceOptions, TraceContext } from '@opencensus/opencensus-core';
 import { B3Format } from '@opencensus/opencensus-propagation-b3'
 
-
-export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
+export class HttpPlugin extends BasePlugin implements Plugin {
 
     constructor() {
         super('http');
     }
 
-    public applyPatch(http: any, tracer: Tracer, version: string) {
+    applyPatch(exporter: any, tracer: Tracer, version: string) {
 
-        this.setPluginContext(http, tracer, version);
+        this.setPluginContext(exporter, tracer, version);
 
         debug('patching http.Server.prototype.emit function')
-        shimmer.wrap(http && http.Server && http.Server.prototype, 'emit', this.patchHttpRequest(this))
+        this.wrap(exporter && exporter.Server && exporter.Server.prototype, 'emit', this.patchHttpRequest(this))
 
         debug('patching http.request function')
-        shimmer.wrap(http, 'request', this.patchOutgoingRequest(this))
+        this.wrap(exporter, 'request', this.patchOutgoingRequest(this))
 
         debug('patching http.ServerResponse.prototype.writeHead function')
-        shimmer.wrap(http && http.ServerResponse && http.ServerResponse.prototype, 'writeHead', this.patchWriteHead(this))
+        this.wrap(exporter && exporter.ServerResponse && exporter.ServerResponse.prototype, 'writeHead', this.patchWriteHead(this))
 
-        return http
+        return exporter
+    }
+
+    applyUnpatch(): void {
+        this.unwrap(this.exporter, 'emit');
+        this.unwrap(this.exporter, 'request');
+        this.unwrap(this.exporter, 'writeHead');
     }
 
     patchHttpRequest(self: HttpPlugin) {
@@ -80,10 +84,15 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
                         self.tracer.wrapEmitter(res);
 
                         eos(res, function (err) {
-                            if (!err) {
-                                return root.end()
-                            }
-                        })
+                            if (!err) return root.end()
+        
+                            // Handle case where res.end is called after an error occurred on the
+                            // stream (e.g. if the underlying socket was prematurely closed)
+                            res.on('prefinish', function () {
+                              root.end()
+                            })
+                          })
+
                         return orig.apply(this, arguments)
                     })
                 } else {
@@ -93,55 +102,55 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
         }
     }
 
-    patchOutgoingRequest (self: HttpPlugin) {
+    patchOutgoingRequest(self: HttpPlugin) {
         var spanType = 'ext.' + self.moduleName + '.http'
-  
+
         return function (orig) {
-          return function () {
-          
-            var req = orig.apply(this, arguments)
-            var name = req.method + ' ' + req._headers.host + url.parse(req.path).pathname
-  
-            //TODO only for tests. Remove and implement a blacklist
-            if (name.indexOf('googleapi') < 0) {
-              var span = self.tracer.startSpan(name, spanType)
-              var id = span.id && span.traceId
-            }
-  
-            if (!span) return req
-            req.on('response', onresponse)
-  
-            return req
-  
-            function onresponse (res) {
- 
-              // Inspired by:
-              // https://github.com/nodejs/node/blob/9623ce572a02632b7596452e079bba066db3a429/lib/events.js#L258-L274
-              if (res.prependListener) {
-                // Added in Node.js 6.0.0
-                res.prependListener('end', onEnd)
-              } else {
-                var existing = res._events && res._events.end
-                if (!existing) {
-                  res.on('end', onEnd)
-                } else {
-                  if (typeof existing === 'function') {
-                    res._events.end = [onEnd, existing]
-                  } else {
-                    existing.unshift(onEnd)
-                  }
+            return function () {
+
+                var req = orig.apply(this, arguments)
+                var name = req.method + ' ' + req._headers.host + url.parse(req.path).pathname
+
+                //TODO only for tests. Remove and implement a blacklist
+                if (name.indexOf('googleapi') < 0) {
+                    var span = self.tracer.startSpan(name, spanType)
+                    var id = span.id && span.traceId
                 }
-              }
-  
-              function onEnd () {
-                //debug('intercepted http.IncomingMessage end event %o', {id: id})
-                span.end()
-              }
+
+                if (!span) return req
+                req.on('response', onresponse)
+
+                return req
+
+                function onresponse(res) {
+
+                    // Inspired by:
+                    // https://github.com/nodejs/node/blob/9623ce572a02632b7596452e079bba066db3a429/lib/events.js#L258-L274
+                    if (res.prependListener) {
+                        // Added in Node.js 6.0.0
+                        res.prependListener('end', onEnd)
+                    } else {
+                        var existing = res._events && res._events.end
+                        if (!existing) {
+                            res.on('end', onEnd)
+                        } else {
+                            if (typeof existing === 'function') {
+                                res._events.end = [onEnd, existing]
+                            } else {
+                                existing.unshift(onEnd)
+                            }
+                        }
+                    }
+
+                    function onEnd() {
+                        //debug('intercepted http.IncomingMessage end event %o', {id: id})
+                        span.end()
+                    }
+                }
             }
-          }
         }
-      }
-  
+    }
+
 
     patchWriteHead(self: HttpPlugin) {
         return function (orig) {
@@ -177,5 +186,4 @@ export class HttpPlugin extends BasePlugin<Tracer> implements Plugin<Tracer> {
 
 }
 
-module.exports = new HttpPlugin()
-
+module.exports = new HttpPlugin();
