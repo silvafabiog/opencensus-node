@@ -21,6 +21,7 @@ import {debug} from '@opencensus/opencensus-core';
 import {RootSpan} from '@opencensus/opencensus-core';
 import {Span} from '@opencensus/opencensus-core';
 import {Exporter} from '@opencensus/opencensus-core';
+import {Buffer} from '@opencensus/opencensus-core';
 
 import {ZipkinOptions} from './options';
 
@@ -28,10 +29,20 @@ import {ZipkinOptions} from './options';
 export class Zipkin implements Exporter {
   private zipkinUrl: url.UrlWithStringQuery;
   private serviceName: string;
+  private buffer: Buffer;
 
   constructor(options: ZipkinOptions) {
     this.zipkinUrl = url.parse(options.url);
     this.serviceName = options.serviceName;
+    this.buffer = new Buffer(this, options.bufferSize, options.bufferTimeout)
+  }
+
+  /**
+   * Is called whenever a span is ended.
+   * @param root the ended span
+   */
+  onEndSpan(root: RootSpan) {
+    this.buffer.addToBuffer(root);
   }
 
   /**
