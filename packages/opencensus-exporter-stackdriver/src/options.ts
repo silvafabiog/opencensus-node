@@ -21,14 +21,16 @@ import {ExporterOptions} from '@opencensus/opencensus-core';
 export class StackdriverOptions implements ExporterOptions {
   projectId: string;
   bufferSize?: number;
+  bufferTimeout?: number;
 
   /**
    * Constructor of StackdriverOptions class.
    * @param projectId project id defined to stackdriver
    * @param bufferSize optional parameter, defines the buffer size
    */
-  constructor(projectId: string, bufferSize?: number) {
+  constructor(projectId: string, bufferSize?: number, bufferTimeout?: number) {
     this.projectId = projectId;
     this.bufferSize = bufferSize;
+    this.bufferTimeout = bufferTimeout;
   }
 }

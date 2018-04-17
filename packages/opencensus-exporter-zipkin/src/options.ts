@@ -20,9 +20,13 @@ import {ExporterOptions} from "@opencensus/opencensus-core"
 export class ZipkinOptions implements ExporterOptions {
     url: string;
     serviceName: string;
+    bufferSize?: number;
+    bufferTimeout?: number;
 
-    constructor(zipkinUrl: string, serviceName: string) {
+    constructor(zipkinUrl: string, serviceName: string, bufferSize: number, bufferTimeout: number) {
         this.url = zipkinUrl;
         this.serviceName = serviceName;
+        this.bufferSize = bufferSize;
+        this.bufferTimeout = bufferTimeout;
     }
 }
