@@ -15,7 +15,6 @@
  */
 
 import * as semver from 'semver'
-import * as shimmer from 'shimmer'
 
 import {Tracer} from '@opencensus/opencensus-core'
 import {debug} from '@opencensus/opencensus-core'
@@ -33,7 +32,7 @@ export class HttpsPlugin extends HttpPlugin {
         this.setPluginContext(exporters, tracer, version);
 
         debug('patching  https.Server.prototype.emit function')
-        shimmer.wrap(exporters && exporters.Server && exporters.Server.prototype, 'emit', this.patchHttpRequest(this))
+        this.wrap(exporters && exporters.Server && exporters.Server.prototype, 'emit', this.patchHttpRequest(this))
 
       // From Nocde.js v9.0.0 and onwards, https requests no longer just call the
       // http.request function. So to correctly instrument outgoing HTTPS requests
@@ -44,7 +43,7 @@ export class HttpsPlugin extends HttpPlugin {
       // https://github.com/nodejs/node/commit/5118f3146643dc55e7e7bd3082d1de4d0e7d5426
       if (semver.gte(version, '9.0.0')) {
         debug('patching  https.request function')
-        shimmer.wrap(exporters, 'request',this.patchOutgoingRequest(this))
+        this.wrap(exporters, 'request',this.patchOutgoingRequest(this))
       }
 
       return exporters
