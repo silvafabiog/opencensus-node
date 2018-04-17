@@ -14,32 +14,39 @@
  * limitations under the License.
  */
 
-import {RootSpan, SamplerImpl, TracerImpl} from '@opencensus/opencensus-core';
+import  * as extend from 'extend';
+import {RootSpan, SamplerImpl, TracerImpl, PluginNames} from '@opencensus/opencensus-core';
 import {Span} from '@opencensus/opencensus-core';
 import {debug} from '@opencensus/opencensus-core';
 import {Tracer} from '@opencensus/opencensus-core';
 import {Tracing} from '@opencensus/opencensus-core';
 import {Sampler} from '@opencensus/opencensus-core';
-import {ExporterOptions} from '@opencensus/opencensus-core';
 import {ConsoleLogExporter, Exporter, NoopExporter} from '@opencensus/opencensus-core';
+import {Config} from '@opencensus/opencensus-core';
 
 import {PluginLoader} from './instrumentation/plugingloader';
 
-export class TracingImpl implements Tracing {
-  private samplerLocal: Sampler;
-  private active_: boolean;
-  private tracerLocal: Tracer;
-  private exporterLocal: Exporter;
-  private pluginLoader: PluginLoader;
+import {defaultConfig} from './config/config'
+import {Constants} from './constants';
 
-  readonly PLUGINS = ['http', 'https', 'mongodb-core'];
+
+
+
+export class TracingImpl implements Tracing {
+
+  private active: boolean;
+  private tracerLocal: Tracer;
+  private pluginLoader: PluginLoader;
+  private defaultPlugins: PluginNames;
+  private config: Config;
+
 
   private static sgltnInstance: Tracing;
 
   constructor() {
     this.tracerLocal = new TracerImpl();
     this.pluginLoader = new PluginLoader(this.tracerLocal);
-    this.samplerLocal = new SamplerImpl();
+    this.defaultPlugins = PluginLoader.defaultPluginsFromArray(Constants.DEFAULT_INSTRUMENTATION_MODULES);
   }
 
   static get instance() {
@@ -51,16 +58,21 @@ export class TracingImpl implements Tracing {
    *
    * @return {type}  description
    */
-  start(): Tracing {
-    if (this.tracerLocal.eventListeners.length === 0) {
-      const options = {} as ExporterOptions;
-      this.exporterLocal = new ConsoleLogExporter(options);
-      this.tracerLocal.registerEndSpanListener(this.exporterLocal);
-    }
-    this.pluginLoader.loadPlugins(
-        PluginLoader.getDefaultPackageMap(this.PLUGINS));
-    this.active_ = true;
-    this.tracerLocal.start();
+  start(userConfig?: Config): Tracing {
+
+    this.config = extend(
+      true, {}, defaultConfig, {plugins: this.defaultPlugins}, userConfig);
+
+    debug("config: %o", this.config);
+
+    this.pluginLoader.loadPlugins(this.config.plugins);
+
+    if(!this.config.exporter) {
+      let exporter = new ConsoleLogExporter(this.config);
+      this.tracerLocal.registerEndSpanListener(exporter);
+    }   
+    this.active = true;
+    this.tracerLocal.start(this.config);
     return this;
   }
 
@@ -70,7 +82,7 @@ export class TracingImpl implements Tracing {
    * @return {type}  description
    */
   stop() {
-    this.active_ = false;
+    this.active = false;
     this.tracerLocal.stop();
   }
 
@@ -78,12 +90,8 @@ export class TracingImpl implements Tracing {
     return this.tracerLocal;
   }
 
-  get sampler(): Sampler {
-    return this.samplerLocal;
-  }
-
   get exporter(): Exporter {
-    return this.exporterLocal;
+    return this.config.exporter;
   }
 
   /**
@@ -91,7 +99,7 @@ export class TracingImpl implements Tracing {
    * @param exporter THe exporter to send the traces to.
    */
   registerExporter(exporter: Exporter): Tracing {
-    this.exporterLocal = exporter;
+    this.config.exporter = exporter;
     this.tracer.registerEndSpanListener(exporter);
     return this;
   }

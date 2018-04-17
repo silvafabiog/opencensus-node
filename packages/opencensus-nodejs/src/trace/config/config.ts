@@ -1,3 +1,5 @@
+
+
 /**
  * Copyright 2018 Google Inc. All Rights Reserved.
  *
@@ -14,12 +16,16 @@
  * limitations under the License.
  */
 
+import {ConsoleLogExporter} from "@opencensus/opencensus-core";
+import {Constants} from '../constants';
 
-import {OnEndSpanEventListener, RootSpan} from '../trace/model/types';
-import { BufferConfig } from '../trace/config/types';
-
-export interface Exporter extends OnEndSpanEventListener {
-  publish(rootSpans: RootSpan[]);
-}
-
-export type  ExporterConfig = BufferConfig;
+export const defaultConfig = {
+    logLevel: 1,
+    maximumLabelValueSize: 150,
+    plugins: {},
+    bufferSize: Constants.DEFAULT_BUFFER_SIZE,
+    bufferTimeout: Constants.DEFAULT_BUFFER_TIMEOUT,
+    samplingRate: 1,
+    exporter: null
+  }
+  

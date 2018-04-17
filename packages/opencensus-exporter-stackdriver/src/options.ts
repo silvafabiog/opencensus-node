@@ -14,23 +14,14 @@
  * limitations under the License.
  */
 
-import {ExporterOptions} from '@opencensus/opencensus-core';
+import {ExporterConfig} from '@opencensus/opencensus-core';
 /**
  * This class represents the options from stackdriver
  */
-export class StackdriverOptions implements ExporterOptions {
-  projectId: string;
-  bufferSize?: number;
-  bufferTimeout?: number;
-
+export interface StackdriverOptions extends ExporterConfig {
   /**
-   * Constructor of StackdriverOptions class.
-   * @param projectId project id defined to stackdriver
-   * @param bufferSize optional parameter, defines the buffer size
+   * projectId project id defined to stackdriver
    */
-  constructor(projectId: string, bufferSize?: number, bufferTimeout?: number) {
-    this.projectId = projectId;
-    this.bufferSize = bufferSize;
-    this.bufferTimeout = bufferTimeout;
-  }
+  projectId: string;
+
 }

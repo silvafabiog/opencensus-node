@@ -22,7 +22,7 @@ import {RootSpan} from '@opencensus/opencensus-core';
 import {Span} from '@opencensus/opencensus-core';
 import {Exporter} from '@opencensus/opencensus-core';
 import {Buffer} from '@opencensus/opencensus-core';
-
+import {Config} from '@opencensus/opencensus-core';
 import {ZipkinOptions} from './options';
 
 /** Zipkin Exporter manager class */
@@ -34,7 +34,7 @@ export class Zipkin implements Exporter {
   constructor(options: ZipkinOptions) {
     this.zipkinUrl = url.parse(options.url);
     this.serviceName = options.serviceName;
-    this.buffer = new Buffer(this, options.bufferSize, options.bufferTimeout)
+    this.buffer = new Buffer(this, options)
   }
 
   /**

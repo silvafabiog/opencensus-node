@@ -15,18 +15,9 @@
  */
 
 
-import {ExporterOptions} from "@opencensus/opencensus-core"
+import {ExporterConfig} from "@opencensus/opencensus-core"
 
-export class ZipkinOptions implements ExporterOptions {
+export interface ZipkinOptions extends ExporterConfig {
     url: string;
     serviceName: string;
-    bufferSize?: number;
-    bufferTimeout?: number;
-
-    constructor(zipkinUrl: string, serviceName: string, bufferSize: number, bufferTimeout: number) {
-        this.url = zipkinUrl;
-        this.serviceName = serviceName;
-        this.bufferSize = bufferSize;
-        this.bufferTimeout = bufferTimeout;
-    }
 }

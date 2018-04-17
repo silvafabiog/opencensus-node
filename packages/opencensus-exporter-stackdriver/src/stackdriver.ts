@@ -40,7 +40,7 @@ export class Stackdriver implements Exporter {
 
   constructor(options: StackdriverOptions) {
     this.projectId = options.projectId;
-    this.buffer = new Buffer(this, options.bufferSize, options.bufferTimeout);
+    this.buffer = new Buffer(this, options);
   }
 
   /**

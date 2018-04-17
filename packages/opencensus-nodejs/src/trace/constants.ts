@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-
-import {OnEndSpanEventListener, RootSpan} from '../trace/model/types';
-import { BufferConfig } from '../trace/config/types';
-
-export interface Exporter extends OnEndSpanEventListener {
-  publish(rootSpans: RootSpan[]);
+export const Constants = {
+  DEFAULT_BUFFER_SIZE: 3,
+  DEFAULT_BUFFER_TIMEOUT: 20000,
+  DEFAULT_INSTRUMENTATION_MODULES: ['http', 'https', 'mongodb-core'],
+  SCOPE: '@opencensus',
+  PLUGIN_PACKAGE_NAME_PREFIX: 'opencensus-instrumentation'
 }
 
-export type  ExporterConfig = BufferConfig;
+
